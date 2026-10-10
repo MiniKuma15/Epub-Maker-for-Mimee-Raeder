@@ -252,5 +252,21 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun updateImageDescription(imageBlockId: String, altText: String? = null, caption: String? = null) {
+        _state.update { current ->
+            val chapters = current.book.chapters.map { chapter ->
+                chapter.copy(contents = chapter.contents.map { item ->
+                    if (item is ImageBlock && item.id == imageBlockId) {
+                        item.copy(image = item.image.copy(
+                            altText = altText ?: item.image.altText,
+                            caption = caption ?: item.image.caption
+                        ))
+                    } else item
+                })
+            }
+            current.copy(book = current.book.copy(chapters = chapters, modifiedAt = Instant.now()))
+        }
+    }
+
     fun dismissError() = _state.update { it.copy(error = null) }
 }

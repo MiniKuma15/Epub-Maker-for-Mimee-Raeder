@@ -28,7 +28,7 @@ internal object PdfOcrEngine {
         serverUrl: String,
         onProgress: (Int, Int) -> Unit
     ): String {
-        if (engine !in setOf("tesseract", "paddleocr", "easyocr", "paddleocr-vl")) {
+        if (engine !in setOf("tesseract", "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai")) {
             error("ไม่รู้จัก OCR Engine: $engine")
         }
         if (engine != "tesseract" &&

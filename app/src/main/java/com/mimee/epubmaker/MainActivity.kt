@@ -349,8 +349,8 @@ private fun EpubMakerScreen(
                         Text("OCR ทำงานบนเครื่อง", fontWeight = FontWeight.SemiBold, color = Ink)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            if (ocrEngine == "tesseract") "Tesseract ทำงานบนเครื่อง ไม่ส่งหน้า PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก" else "โหมดออนไลน์ส่งภาพหน้าหนังสือไปยัง OCR Server ที่ตั้งค่าไว้ โดย Google engines จะส่งต่อภาพไปยัง Google API"
-                            , color = Ink,
+                            if (ocrEngine == "tesseract") "Tesseract ทำงานบนเครื่อง ไม่ส่งหน้า PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก" else "โหมดออนไลน์ส่งภาพหน้าหนังสือไปยัง OCR Server ที่ตั้งค่าไว้ โดย Google engines จะส่งต่อภาพไปยัง Google API",
+                            color = Ink,
                             fontSize = 13.sp
                         )
                         OutlinedButton(

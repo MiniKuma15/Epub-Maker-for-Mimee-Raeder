@@ -189,7 +189,7 @@ class EpubBookWriter(private val context: Context) {
         if (path == null) return ""
         val alt = xml(block.image.altText)
         val caption = block.image.caption.takeIf { it.isNotBlank() }?.let { "<figcaption>${xml(it)}</figcaption>" }.orEmpty()
-        return "<figure><img src=\"${xml(path)}\" alt=\"$alt\"/>$caption</figure>"
+        return "<figure><img src=\"../${xml(path)}\" alt=\"$alt\"/>$caption</figure>"
     }
 
     private fun readCover(cover: CoverImage, book: Book): ByteArray? {

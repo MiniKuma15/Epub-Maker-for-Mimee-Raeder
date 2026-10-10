@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,12 +28,12 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -51,6 +52,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.OutputStream
 import java.util.UUID
 import java.util.zip.ZipEntry
@@ -84,6 +89,24 @@ class MainActivity : ComponentActivity() {
             ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Sky) {
                     EpubMakerScreen(
+                        onOcrPdf = { uri, progress, completed, failed ->
+                            lifecycleScope.launch {
+                                try {
+                                    val text = withContext(Dispatchers.IO) {
+                                        PdfOcrEngine.recognize(
+                                            context = this@MainActivity,
+                                            uri = uri,
+                                            onProgress = { current, total ->
+                                                runOnUiThread { progress(current, total) }
+                                            }
+                                        )
+                                    }
+                                    completed(text)
+                                } catch (e: Exception) {
+                                    failed(e.localizedMessage ?: "ไม่สามารถอ่านข้อความจาก PDF ได้")
+                                }
+                            }
+                        },
                         onExport = { title, author, text, uri ->
                             try {
                                 contentResolver.openOutputStream(uri)?.use { output ->
@@ -93,7 +116,7 @@ class MainActivity : ComponentActivity() {
                             } catch (e: Exception) {
                                 Toast.makeText(
                                     this,
-                                    "ส่งออกไม่สำเร็จ: ${e.localizedMessage ?: "เกิดข้อผิดพลาด"}",
+                                    "ส่งออกไม่สำเร็จ: \${e.localizedMessage ?: "เกิดข้อผิดพลาด"}",
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -108,12 +131,44 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EpubMakerScreen(
+    onOcrPdf: (Uri, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
     onExport: (String, String, String, Uri) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var author by remember { mutableStateOf("") }
     var manuscript by remember { mutableStateOf("") }
     var showHelp by remember { mutableStateOf(true) }
+    var ocrRunning by remember { mutableStateOf(false) }
+    var ocrStatus by remember { mutableStateOf("เลือก PDF เพื่อเริ่มอ่านข้อความ") }
+    var ocrProgress by remember { mutableStateOf(0f) }
+
+    val pdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            ocrRunning = true
+            ocrProgress = 0f
+            ocrStatus = "กำลังเตรียม OCR ภาษาไทยและอังกฤษ…"
+            onOcrPdf(
+                uri,
+                { current, total ->
+                    ocrProgress = if (total > 0) current.toFloat() / total else 0f
+                    ocrStatus = "กำลังอ่านข้อความ หน้า $current จาก $total"
+                },
+                { extracted ->
+                    manuscript = if (manuscript.isBlank()) extracted else manuscript.trimEnd() + "\n\n" + extracted
+                    if (title.isBlank()) title = "หนังสือที่นำเข้า"
+                    ocrRunning = false
+                    ocrProgress = 1f
+                    ocrStatus = "อ่านข้อความเสร็จแล้ว ตรวจแก้ข้อความก่อนส่งออกได้"
+                },
+                { error ->
+                    ocrRunning = false
+                    ocrStatus = "OCR ไม่สำเร็จ: $error"
+                }
+            )
+        }
+    }
 
     val saveLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/epub+zip")
@@ -139,14 +194,54 @@ private fun EpubMakerScreen(
             }
             Column(modifier = Modifier.padding(start = 12.dp)) {
                 Text("Epub Maker", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink)
-                Text("เปลี่ยนต้นฉบับให้เป็นหนังสือของคุณ", color = Muted, fontSize = 13.sp)
+                Text("เปลี่ยน PDF ให้เป็นหนังสือ EPUB", color = Muted, fontSize = 13.sp)
             }
         }
 
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(24.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Line)
+            border = BorderStroke(1.dp, Line)
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Icon(Icons.Default.FileOpen, null, tint = Blue)
+                    Text("  นำเข้า PDF และอ่านข้อความ", fontWeight = FontWeight.SemiBold, color = Ink)
+                }
+                Text(
+                    "เลือกไฟล์ PDF ระบบจะอ่านข้อความทีละหน้าและนำผลมาใส่ในช่องแก้ไขด้านล่าง ใช้ OCR ภาษาไทย + อังกฤษ",
+                    color = Muted,
+                    fontSize = 13.sp
+                )
+                Button(
+                    onClick = { pdfLauncher.launch(arrayOf("application/pdf")) },
+                    enabled = !ocrRunning,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(15.dp)
+                ) {
+                    androidx.compose.material3.Icon(Icons.Default.FileOpen, null)
+                    Text("  เลือก PDF แล้วเริ่ม OCR")
+                }
+                if (ocrRunning) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CircularProgressIndicator(progress = { ocrProgress }, modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                        Text(ocrStatus, color = Blue, fontSize = 13.sp)
+                    }
+                } else {
+                    Text(ocrStatus, color = Muted, fontSize = 13.sp)
+                }
+                Text(
+                    "หมายเหตุ: ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยและอังกฤษผ่านอินเทอร์เน็ต หลังจากนั้น OCR ทำงานบนเครื่องได้",
+                    color = Muted,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.dp, Line)
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -177,27 +272,23 @@ private fun EpubMakerScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(24.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Line)
+            border = BorderStroke(1.dp, Line)
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.material3.Icon(Icons.Default.TextFields, null, tint = Blue)
                     Text("  ต้นฉบับข้อความ", fontWeight = FontWeight.SemiBold, color = Ink)
                 }
-                Text(
-                    "วางข้อความที่ได้จาก OCR ลงในช่องนี้ แล้วตรวจแก้ก่อนส่งออก",
-                    color = Muted,
-                    fontSize = 13.sp
-                )
+                Text("ตรวจแก้ข้อความ OCR ในช่องนี้ได้ก่อนส่งออกเป็น EPUB", color = Muted, fontSize = 13.sp)
                 OutlinedTextField(
                     value = manuscript,
                     onValueChange = { manuscript = it },
-                    modifier = Modifier.fillMaxWidth().height(240.dp),
+                    modifier = Modifier.fillMaxWidth().height(280.dp),
                     label = { Text("ข้อความในหนังสือ") },
-                    placeholder = { Text("วางหรือพิมพ์ข้อความที่นี่…\n\nเว้นบรรทัดระหว่างย่อหน้า") },
+                    placeholder = { Text("ข้อความจาก PDF จะปรากฏที่นี่…") },
                     shape = RoundedCornerShape(14.dp)
                 )
-                Text("${manuscript.trim().length} ตัวอักษร", color = Muted, fontSize = 12.sp)
+                Text("\${manuscript.trim().length} ตัวอักษร", color = Muted, fontSize = 12.sp)
             }
         }
 
@@ -209,10 +300,10 @@ private fun EpubMakerScreen(
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
                     androidx.compose.material3.Icon(Icons.Default.CheckCircle, null, tint = Blue)
                     Column(Modifier.padding(start = 10.dp)) {
-                        Text("ขั้นแรกพร้อมใช้งาน", fontWeight = FontWeight.SemiBold, color = Ink)
+                        Text("OCR ทำงานบนเครื่อง", fontWeight = FontWeight.SemiBold, color = Ink)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "ตอนนี้ส่งออก EPUB3 จากข้อความที่แก้ไขแล้วได้ ส่วนการนำเข้า PDF และ OCR ภาษาไทย/อังกฤษจะพัฒนาเป็นขั้นถัดไป",
+                            "ระบบใช้ Tesseract OCR กับข้อมูลภาษาไทยและอังกฤษ ไม่ส่งไฟล์ PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก",
                             color = Ink,
                             fontSize = 13.sp
                         )
@@ -230,11 +321,11 @@ private fun EpubMakerScreen(
             onClick = {
                 saveLauncher.launch(
                     (title.trim().ifBlank { "my-book" })
-                        .replace(Regex("[\\/:*?\"<>|]"), "_")
+                        .replace(Regex("[\\\\/:*?\\"<>|]"), "_")
                         .take(80) + ".epub"
                 )
             },
-            enabled = title.isNotBlank() && manuscript.isNotBlank(),
+            enabled = title.isNotBlank() && manuscript.isNotBlank() && !ocrRunning,
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -259,9 +350,9 @@ private object EpubWriter {
             .split(Regex("\\r?\\n\\s*\\r?\\n"))
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-            .joinToString("\n") { "<p>${xml(it).replace("\n", "<br/>")}</p>" }
+            .joinToString("\n") { "<p>\${xml(it).replace("\n", "<br/>")}</p>" }
 
-        val bookId = "urn:uuid:${UUID.randomUUID()}"
+        val bookId = "urn:uuid:\${UUID.randomUUID()}"
         val chapter = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="th" lang="th">
 <head><title>$safeTitle</title><meta charset="UTF-8"/><link rel="stylesheet" type="text/css" href="../styles/book.css"/></head>
@@ -273,7 +364,7 @@ private object EpubWriter {
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="book-id">$bookId</dc:identifier>
 <dc:title>$safeTitle</dc:title><dc:creator>$safeAuthor</dc:creator>
-<dc:language>th</dc:language><meta property="dcterms:modified">${java.time.Instant.now().toString().substring(0, 19)}Z</meta>
+<dc:language>th</dc:language><meta property="dcterms:modified">\${java.time.Instant.now().toString().substring(0, 19)}Z</meta>
 </metadata>
 <manifest>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -314,6 +405,6 @@ private object EpubWriter {
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-        .replace("\"", "&quot;")
+        .replace("\\"", "&quot;")
         .replace("'", "&apos;")
 }

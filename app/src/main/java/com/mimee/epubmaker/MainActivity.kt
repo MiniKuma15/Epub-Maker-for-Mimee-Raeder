@@ -1,5 +1,7 @@
 package com.mimee.epubmaker
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
@@ -117,6 +119,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         },
+                        onImportText = { uri, completed, failed ->
+                            lifecycleScope.launch {
+                                try {
+                                    val imported = withContext(Dispatchers.IO) {
+                                        contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                                            ?: error("เปิดไฟล์ข้อความไม่ได้")
+                                    }
+                                    completed(imported)
+                                } catch (e: Exception) {
+                                    failed(e.localizedMessage ?: "นำเข้าไฟล์ข้อความไม่สำเร็จ")
+                                }
+                            }
+                        },
                         onExport = { title, author, text, uri ->
                             lifecycleScope.launch {
                                 try {
@@ -147,6 +162,7 @@ class MainActivity : ComponentActivity() {
 private fun EpubMakerScreen(
     context: Context,
     onOcrPdf: (Uri, String, String, String, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
+    onImportText: (Uri, (String) -> Unit, (String) -> Unit) -> Unit,
     onExport: (String, String, String, Uri) -> Unit
 ) {
     val draftPrefs = remember(context) { context.getSharedPreferences("epub_maker_draft", Context.MODE_PRIVATE) }
@@ -175,6 +191,26 @@ private fun EpubMakerScreen(
             .putString("ocrServerUrl", ocrServerUrl)
             .putString("ocrServerToken", ocrServerToken)
             .apply()
+    }
+
+    val textLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            onImportText(
+                uri,
+                { imported ->
+                    manuscript = imported
+                    if (title.isBlank()) title = "ข้อความที่นำเข้า"
+                    ocrStatus = "นำเข้าไฟล์ข้อความสำเร็จ ตรวจแก้แล้วส่งออกเป็น EPUB ได้"
+                    Toast.makeText(context, "นำเข้าข้อความสำเร็จ", Toast.LENGTH_SHORT).show()
+                },
+                { error ->
+                    ocrStatus = "นำเข้าไฟล์ข้อความไม่สำเร็จ: $error"
+                    Toast.makeText(context, ocrStatus, Toast.LENGTH_LONG).show()
+                }
+            )
+        }
     }
 
     val pdfLauncher = rememberLauncherForActivityResult(
@@ -392,6 +428,21 @@ private fun EpubMakerScreen(
                 }
                 Text("ตรวจแก้ข้อความ OCR ได้ก่อนส่งออก หากขึ้นต้นบรรทัดด้วย # ชื่อบท ระบบจะแยกเป็นบทและสร้างสารบัญให้", color = Muted, fontSize = 13.sp)
                 Text("จำนวนตัวอักษร: ${manuscript.length} • จำนวนบท: $chapterCount", color = Muted, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { textLauncher.launch(arrayOf("text/plain", "text/*")) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("นำเข้าไฟล์ TXT") }
+                    OutlinedButton(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("EPUB Maker manuscript", manuscript))
+                            Toast.makeText(context, "คัดลอกข้อความแล้ว", Toast.LENGTH_SHORT).show()
+                        },
+                        enabled = manuscript.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("คัดลอกข้อความ") }
+                }
                 OutlinedTextField(
                     value = manuscript,
                     onValueChange = { manuscript = it },

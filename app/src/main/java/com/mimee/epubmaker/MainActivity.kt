@@ -432,8 +432,20 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                     Text("ฝังภาพใน EPUB: ${images.size} ภาพ", color = Blue, fontWeight = FontWeight.SemiBold)
                     images.forEachIndexed { index, image ->
                         Text("ภาพ ${index + 1}: ${image.image.fileName}", fontWeight = FontWeight.Medium, color = Ink)
-                        Text("Alt Text: ${image.image.altText}", color = Muted, fontSize = 12.sp)
-                        if (image.image.caption.isNotBlank()) Text("Caption: ${image.image.caption}", color = Muted, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = image.image.altText,
+                            onValueChange = { vm.updateImageDescription(image.id, altText = it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Alt Text / คำอธิบายภาพ") },
+                            singleLine = false
+                        )
+                        OutlinedTextField(
+                            value = image.image.caption,
+                            onValueChange = { vm.updateImageDescription(image.id, caption = it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Caption / คำบรรยายภาพ") },
+                            singleLine = false
+                        )
                     }
                     Text("รูปภาพถูกเก็บเป็น ImageBlock และจะฝังลง EPUB เมื่อส่งออก", color = Muted, fontSize = 12.sp)
                 }

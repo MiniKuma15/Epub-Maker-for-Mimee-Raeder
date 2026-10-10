@@ -38,3 +38,5 @@ Build validation branch created to run the repository's GitHub Actions checks ag
 Validation refresh: include the latest image-preview and editor-state fixes from main.
 
 Validation refresh: include the final image-preview state-key syntax adjustment.
+
+Validation refresh: resolve Compose Image versus Material Image icon import naming.

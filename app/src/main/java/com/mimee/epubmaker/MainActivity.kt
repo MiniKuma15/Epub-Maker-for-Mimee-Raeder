@@ -156,6 +156,8 @@ private fun EpubMakerScreen(
     var ocrStatus by remember { mutableStateOf("เลือก PDF เพื่อเริ่มอ่านข้อความ") }
     var ocrProgress by remember { mutableStateOf(0f) }
 
+    val chapterCount = manuscript.lines().count { it.trim().startsWith("# ") }
+
     LaunchedEffect(title, author, manuscript, ocrEngine, ocrServerUrl) {
         delay(400)
         draftPrefs.edit()
@@ -356,7 +358,6 @@ private fun EpubMakerScreen(
                     placeholder = { Text("ข้อความจาก PDF จะปรากฏที่นี่…") },
                     shape = RoundedCornerShape(14.dp)
                 )
-                Text("${manuscript.trim().length} ตัวอักษร", color = Muted, fontSize = 12.sp)
             }
         }
 

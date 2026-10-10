@@ -186,8 +186,28 @@ private fun EpubMakerScreen(
                 ocrServerUrl,
                 ocrServerToken,
                 { current, total ->
-                    ocrProgress = if (total > 0) current.toFloat() / total else 0f
-                    ocrStatus = "กำลังอ่านข้อความ หน้า $current จาก $total"
+                    when {
+                        current == -1 -> {
+                            ocrProgress = 0f
+                            ocrStatus = "กำลังดาวน์โหลดโมเดล OCR ภาษาไทย… ครั้งแรกอาจใช้เวลาสักครู่"
+                        }
+                        current == -2 -> {
+                            ocrProgress = 0f
+                            ocrStatus = "กำลังดาวน์โหลดโมเดล OCR ภาษาอังกฤษ… ครั้งแรกอาจใช้เวลาสักครู่"
+                        }
+                        total < 0 -> {
+                            ocrProgress = 0f
+                            ocrStatus = "เตรียมโมเดล OCR เสร็จแล้ว กำลังเริ่มอ่านข้อความ…"
+                        }
+                        total == 0 -> {
+                            ocrProgress = 0f
+                            ocrStatus = "กำลังตรวจสอบและเตรียมโมเดล OCR ภาษาไทย/อังกฤษ…"
+                        }
+                        else -> {
+                            ocrProgress = current.toFloat() / total
+                            ocrStatus = "กำลังอ่านข้อความ หน้า $current จาก $total"
+                        }
+                    }
                 },
                 { extracted ->
                     manuscript = if (manuscript.isBlank()) extracted else manuscript.trimEnd() + "\n\n" + extracted

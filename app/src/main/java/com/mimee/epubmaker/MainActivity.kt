@@ -14,7 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.Image as ComposeImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -508,7 +508,7 @@ private fun ImportedImagePreview(sourceUri: String, altText: String) {
         }
     }
     if (bitmap != null) {
-        Image(
+        ComposeImage(
             bitmap = bitmap!!.asImageBitmap(),
             contentDescription = altText,
             contentScale = ContentScale.Fit,

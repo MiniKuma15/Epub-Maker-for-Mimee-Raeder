@@ -8,6 +8,10 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import com.googlecode.tesseract.android.TessBaseAPI
 import org.json.JSONObject
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.android.gms.tasks.Tasks
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -30,7 +34,7 @@ internal object PdfOcrEngine {
         onProgress: (Int, Int) -> Unit,
         onPartialResult: (String) -> Unit
     ): String {
-        if (engine !in setOf("tesseract", "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai")) {
+        if (engine !in setOf("tesseract", "mlkit-latin", "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai")) {
             error("ไม่รู้จัก OCR Engine: $engine")
         }
         if (engine != "tesseract" &&
@@ -62,11 +66,10 @@ internal object PdfOcrEngine {
                             }
                             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                             try {
-                                val recognized = if (api != null) {
-                                    api.setImage(bitmap)
-                                    api.getUTF8Text() ?: ""
-                                } else {
-                                    recognizeRemote(bitmap, engine, serverUrl, serverToken)
+                                val recognized = when {
+                                    api != null -> { api.setImage(bitmap); api.getUTF8Text() ?: "" }
+                                    engine == "mlkit-latin" -> recognizeMlKitLatin(bitmap)
+                                    else -> recognizeRemote(bitmap, engine, serverUrl, serverToken)
                                 }
                                 if (recognized.isNotBlank()) {
                                     if (output.isNotEmpty()) output.append("\n\n")
@@ -86,6 +89,46 @@ internal object PdfOcrEngine {
             }
         } finally {
             api?.end()
+        }
+    }
+
+
+    /**
+     * Recognizes one already-rendered page/image. Call only after the user starts conversion.
+     * ML Kit's bundled Latin model is intended for Latin scripts; Thai OCR uses Tesseract.
+     */
+    fun recognizeBitmap(
+        context: Context,
+        bitmap: Bitmap,
+        engine: String,
+        serverUrl: String,
+        serverToken: String,
+        onProgress: (Int, Int) -> Unit = { _, _ -> }
+    ): String {
+        return when (engine) {
+            "tesseract" -> {
+                val api = createTesseract(context, onProgress)
+                try {
+                    api.setImage(bitmap)
+                    api.getUTF8Text().orEmpty().trim()
+                } finally {
+                    api.end()
+                }
+            }
+            "mlkit-latin" -> recognizeMlKitLatin(bitmap).trim()
+            "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai" ->
+                recognizeRemote(bitmap, engine, serverUrl, serverToken).trim()
+            else -> error("ไม่รู้จัก OCR Engine: $engine")
+        }
+    }
+
+    private fun recognizeMlKitLatin(bitmap: Bitmap): String {
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        return try {
+            val image = InputImage.fromBitmap(bitmap, 0)
+            Tasks.await(recognizer.process(image)).text
+        } finally {
+            recognizer.close()
         }
     }
 

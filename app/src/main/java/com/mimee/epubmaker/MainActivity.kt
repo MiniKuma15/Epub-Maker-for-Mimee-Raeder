@@ -1,5 +1,6 @@
 package com.mimee.epubmaker
 
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
@@ -42,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.OutputStream
@@ -89,6 +92,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Sky) {
                     EpubMakerScreen(
+                        context = this@MainActivity,
                         onOcrPdf = { uri, engine, serverUrl, progress, completed, failed ->
                             lifecycleScope.launch {
                                 try {
@@ -118,7 +122,7 @@ class MainActivity : ComponentActivity() {
                             } catch (e: Exception) {
                                 Toast.makeText(
                                     this,
-                                    "ส่งออกไม่สำเร็จ: \${e.localizedMessage ?: "เกิดข้อผิดพลาด"}",
+                                    "ส่งออกไม่สำเร็จ: ${e.localizedMessage ?: "เกิดข้อผิดพลาด"}",
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -133,18 +137,29 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EpubMakerScreen(
+    context: Context,
     onOcrPdf: (Uri, String, String, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
     onExport: (String, String, String, Uri) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
+    val draftPrefs = remember(context) { context.getSharedPreferences("epub_maker_draft", Context.MODE_PRIVATE) }
+    var title by remember { mutableStateOf(draftPrefs.getString("title", "") ?: "") }
     var ocrEngine by remember { mutableStateOf("tesseract") }
     var ocrServerUrl by remember { mutableStateOf("https://your-ocr-server.example.com") }
-    var author by remember { mutableStateOf("") }
-    var manuscript by remember { mutableStateOf("") }
+    var author by remember { mutableStateOf(draftPrefs.getString("author", "") ?: "") }
+    var manuscript by remember { mutableStateOf(draftPrefs.getString("manuscript", "") ?: "") }
     var showHelp by remember { mutableStateOf(true) }
     var ocrRunning by remember { mutableStateOf(false) }
     var ocrStatus by remember { mutableStateOf("เลือก PDF เพื่อเริ่มอ่านข้อความ") }
     var ocrProgress by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(title, author, manuscript) {
+        delay(400)
+        draftPrefs.edit()
+            .putString("title", title)
+            .putString("author", author)
+            .putString("manuscript", manuscript)
+            .apply()
+    }
 
     val pdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -334,7 +349,7 @@ private fun EpubMakerScreen(
                     placeholder = { Text("ข้อความจาก PDF จะปรากฏที่นี่…") },
                     shape = RoundedCornerShape(14.dp)
                 )
-                Text("\${manuscript.trim().length} ตัวอักษร", color = Muted, fontSize = 12.sp)
+                Text("${manuscript.trim().length} ตัวอักษร", color = Muted, fontSize = 12.sp)
             }
         }
 
@@ -367,7 +382,7 @@ private fun EpubMakerScreen(
             onClick = {
                 saveLauncher.launch(
                     (title.trim().ifBlank { "my-book" })
-                        .replace(Regex("[\\\\/:*?\\"<>|]"), "_")
+                        .replace(Regex("[^A-Za-z0-9ก-๙._ -]"), "_")
                         .take(80) + ".epub"
                 )
             },
@@ -389,56 +404,91 @@ private fun EpubMakerScreen(
 }
 
 private object EpubWriter {
+    private data class Chapter(val title: String, val body: String)
+
     fun write(output: OutputStream, title: String, author: String, manuscript: String) {
-        val safeTitle = xml(title.trim())
+        require(manuscript.isNotBlank()) { "ไม่มีข้อความสำหรับส่งออก" }
+        val safeTitle = xml(title.trim().ifBlank { "Untitled" })
         val safeAuthor = xml(author.trim().ifBlank { "ไม่ระบุผู้แต่ง" })
-        val paragraphs = manuscript.trim()
-            .split(Regex("\\r?\\n\\s*\\r?\\n"))
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n") { "<p>\${xml(it).replace("\n", "<br/>")}</p>" }
+        val chapters = parseChapters(manuscript)
+        val bookId = "urn:uuid:${UUID.randomUUID()}"
+        val modified = java.time.Instant.now().toString()
 
-        val bookId = "urn:uuid:\${UUID.randomUUID()}"
-        val chapter = """<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="th" lang="th">
-<head><title>$safeTitle</title><meta charset="UTF-8"/><link rel="stylesheet" type="text/css" href="../styles/book.css"/></head>
-<body><h1>$safeTitle</h1>$paragraphs</body>
-</html>"""
-
+        val manifest = StringBuilder()
+        val spine = StringBuilder()
+        val toc = StringBuilder()
+        chapters.forEachIndexed { index, chapter ->
+            val id = "chapter${index + 1}"
+            val file = "text/$id.xhtml"
+            manifest.append("<item id=\"$id\" href=\"$file\" media-type=\"application/xhtml+xml\"/>\n")
+            spine.append("<itemref idref=\"$id\"/>")
+            toc.append("<li><a href=\"$file\">${xml(chapter.title)}</a></li>")
+        }
         val opf = """<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="th" prefix="dcterms: http://purl.org/dc/terms/">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-<dc:identifier id="book-id">$bookId</dc:identifier>
-<dc:title>$safeTitle</dc:title><dc:creator>$safeAuthor</dc:creator>
-<dc:language>th</dc:language><meta property="dcterms:modified">\${java.time.Instant.now().toString().substring(0, 19)}Z</meta>
+<dc:identifier id="book-id">$bookId</dc:identifier><dc:title>$safeTitle</dc:title><dc:creator>$safeAuthor</dc:creator>
+<dc:language>th</dc:language><meta property="dcterms:modified">$modified</meta>
 </metadata>
-<manifest>
-<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-<item id="chapter" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>
-<item id="css" href="styles/book.css" media-type="text/css"/>
-</manifest>
-<spine><itemref idref="chapter"/></spine>
-</package>"""
+<manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+$manifest<item id="css" href="styles/book.css" media-type="text/css"/></manifest>
+<spine>$spine</spine></package>"""
 
         val nav = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="th" lang="th">
 <head><title>สารบัญ</title><meta charset="UTF-8"/></head>
-<body><nav epub:type="toc" id="toc"><h1>สารบัญ</h1><ol><li><a href="text/chapter.xhtml">$safeTitle</a></li></ol></nav></body>
-</html>"""
-
-        val css = """body { font-family: serif; line-height: 1.7; margin: 5%; } h1 { text-align: center; margin: 1em 0 2em; font-size: 1.5em; } p { text-indent: 1em; margin: 0 0 0.8em; white-space: normal; }"""
+<body><nav epub:type="toc" id="toc"><h1>สารบัญ</h1><ol>$toc</ol></nav></body></html>"""
+        val css = """body { font-family: serif; line-height: 1.7; margin: 5%; } h1 { text-align: center; margin: 1em 0 2em; font-size: 1.5em; } p { text-indent: 1em; margin: 0 0 0.8em; }"""
 
         ZipOutputStream(output).use { zip ->
-            zip.putNextEntry(ZipEntry("mimetype").apply { method = ZipEntry.STORED; size = 20; compressedSize = 20; crc = 0x2cab616fL })
-            zip.write("application/epub+zip".toByteArray(Charsets.US_ASCII))
+            val mime = "application/epub+zip".toByteArray(Charsets.US_ASCII)
+            val mimeEntry = ZipEntry("mimetype").apply {
+                method = ZipEntry.STORED
+                size = mime.size.toLong()
+                compressedSize = mime.size.toLong()
+                crc = java.util.zip.CRC32().apply { update(mime) }.value
+            }
+            zip.putNextEntry(mimeEntry)
+            zip.write(mime)
             zip.closeEntry()
             add(zip, "META-INF/container.xml", """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>""")
             add(zip, "OEBPS/content.opf", opf)
             add(zip, "OEBPS/nav.xhtml", nav)
-            add(zip, "OEBPS/text/chapter.xhtml", chapter)
+            chapters.forEachIndexed { index, chapter ->
+                val paragraphs = chapter.body.split(Regex("\\r?\\n\\s*\\r?\\n"))
+                    .map { it.trim() }.filter { it.isNotEmpty() }
+                    .joinToString("\n") { "<p>${xml(it).replace("\\n", "<br/>")}</p>" }
+                val xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="th" lang="th">
+<head><title>${xml(chapter.title)}</title><meta charset="UTF-8"/><link rel="stylesheet" type="text/css" href="../styles/book.css"/></head>
+<body><h1>${xml(chapter.title)}</h1>$paragraphs</body></html>"""
+                add(zip, "OEBPS/text/chapter${index + 1}.xhtml", xhtml)
+            }
             add(zip, "OEBPS/styles/book.css", css)
         }
+    }
+
+    private fun parseChapters(text: String): List<Chapter> {
+        val chapters = mutableListOf<Chapter>()
+        var currentTitle = "เนื้อหา"
+        val body = StringBuilder()
+        fun flush() {
+            val content = body.toString().trim()
+            if (content.isNotEmpty()) chapters.add(Chapter(currentTitle, content))
+            body.clear()
+        }
+        text.replace("\\r\\n", "\\n").lines().forEach { line ->
+            val heading = line.trim().takeIf { it.startsWith("# ") }?.removePrefix("# ")?.trim()
+            if (!heading.isNullOrBlank()) {
+                flush()
+                currentTitle = heading
+            } else {
+                body.append(line).append('\\n')
+            }
+        }
+        flush()
+        return chapters.ifEmpty { listOf(Chapter("เนื้อหา", text.trim())) }
     }
 
     private fun add(zip: ZipOutputStream, path: String, text: String) {
@@ -451,6 +501,6 @@ private object EpubWriter {
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-        .replace("\\"", "&quot;")
+        .replace("\"", "&quot;")
         .replace("'", "&apos;")
 }

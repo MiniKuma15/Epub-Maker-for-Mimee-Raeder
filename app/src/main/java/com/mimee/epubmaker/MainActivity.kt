@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = Sky) {
                     EpubMakerScreen(
                         context = this@MainActivity,
-                        onOcrPdf = { uri, engine, serverUrl, serverToken, progress, completed, failed ->
+                        onOcrPdf = { uri, engine, serverUrl, serverToken, progress, partialResult, completed, failed ->
                             lifecycleScope.launch {
                                 try {
                                     val text = withContext(Dispatchers.IO) {
@@ -105,6 +105,9 @@ class MainActivity : ComponentActivity() {
                                             serverToken = serverToken,
                                             onProgress = { current, total ->
                                                 runOnUiThread { progress(current, total) }
+                                            },
+                                            onPartialResult = { text ->
+                                                runOnUiThread { partialResult(text) }
                                             }
                                         )
                                     }
@@ -143,7 +146,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun EpubMakerScreen(
     context: Context,
-    onOcrPdf: (Uri, String, String, String, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
+    onOcrPdf: (Uri, String, String, String, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
     onExport: (String, String, String, Uri) -> Unit
 ) {
     val draftPrefs = remember(context) { context.getSharedPreferences("epub_maker_draft", Context.MODE_PRIVATE) }
@@ -158,6 +161,7 @@ private fun EpubMakerScreen(
     var ocrRunning by remember { mutableStateOf(false) }
     var ocrStatus by remember { mutableStateOf("เลือก PDF เพื่อเริ่มอ่านข้อความ") }
     var ocrProgress by remember { mutableStateOf(0f) }
+    var manuscriptBeforeOcr by remember { mutableStateOf("") }
 
     val chapterCount = manuscript.lines().count { it.trim().startsWith("# ") }
 
@@ -177,6 +181,7 @@ private fun EpubMakerScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
+            manuscriptBeforeOcr = manuscript
             ocrRunning = true
             ocrProgress = 0f
             ocrStatus = "กำลังเตรียม OCR ภาษาไทยและอังกฤษ…"
@@ -209,8 +214,11 @@ private fun EpubMakerScreen(
                         }
                     }
                 },
+                { partial ->
+                    manuscript = if (manuscriptBeforeOcr.isBlank()) partial else manuscriptBeforeOcr.trimEnd() + "\n\n" + partial
+                },
                 { extracted ->
-                    manuscript = if (manuscript.isBlank()) extracted else manuscript.trimEnd() + "\n\n" + extracted
+                    manuscript = if (manuscriptBeforeOcr.isBlank()) extracted else manuscriptBeforeOcr.trimEnd() + "\n\n" + extracted
                     if (title.isBlank()) title = "หนังสือที่นำเข้า"
                     ocrRunning = false
                     ocrProgress = 1f

@@ -56,6 +56,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                 selectedUri = uri,
                 selectedMimeType = mimeType,
                 selectedFileName = displayName,
+                book = Book(metadata = BookMetadata(title = it.title, authors = it.author.takeIf { author -> author.isNotBlank() }?.let(::listOf).orEmpty())),
                 status = "เลือกไฟล์แล้ว: $displayName — ยังไม่ได้เริ่มประมวลผล",
                 error = null,
                 hasConverted = false

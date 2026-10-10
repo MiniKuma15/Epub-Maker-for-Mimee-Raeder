@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     val state by vm.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var editorValue by remember { mutableStateOf(TextFieldValue("")) }
     var alignment by remember { mutableStateOf(TextAlignment.START) }
     var indent by remember { mutableFloatStateOf(1f) }
@@ -142,18 +143,16 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
 
     val pickSource = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            val mime = runCatching { vm.javaClass }.getOrNull()
-            val resolver = androidx.compose.ui.platform.LocalContext.current.contentResolver
+            val resolver = context.contentResolver
             val type = resolver.getType(uri) ?: when (uri.toString().lowercase()) {
                 else -> if (uri.toString().lowercase().endsWith(".pdf")) "application/pdf" else "image/jpeg"
             }
-            val name = queryDisplayName(resolver, uri)
+            val name = queryDisplayName(context, uri)
             vm.selectSource(uri, type, name)
         }
     }
     val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            val context = androidx.compose.ui.platform.LocalContext.current
             val type = context.contentResolver.getType(uri) ?: "image/jpeg"
             vm.setCoverImage(uri, type, queryDisplayName(context.contentResolver, uri))
         }

@@ -33,4 +33,4 @@ Pushes to `main` trigger `.github/workflows/android-build.yml`. The workflow run
 - The editor preserves inline rich-text runs in the EPUB model. The EPUB is reflowable and does not attempt to reproduce the exact PDF page layout.
 
 
-Build validation branch created to run the repository's GitHub Actions checks against the current app sources.
+Build validation branch created to run the repository's GitHub Actions checks against the current app sources. The validation commit was refreshed after fixing the initial compiler errors.

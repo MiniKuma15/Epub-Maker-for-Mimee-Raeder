@@ -482,7 +482,7 @@ $manifest<item id="css" href="styles/book.css" media-type="text/css"/></manifest
                     .map { it.trim() }.filter { it.isNotEmpty() }
                     .joinToString("\n") { "<p>" + xml(it).replace("\n", "<br/>") + "</p>" }
                 val xhtml = """<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="th" lang="th">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="$language" lang="$language">
 <head><title>${xml(chapter.title)}</title><meta charset="UTF-8"/><link rel="stylesheet" type="text/css" href="../styles/book.css"/></head>
 <body><h1>${xml(chapter.title)}</h1>$paragraphs</body></html>"""
                 add(zip, "OEBPS/text/chapter${index + 1}.xhtml", xhtml)

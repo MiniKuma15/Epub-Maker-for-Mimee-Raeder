@@ -37,7 +37,7 @@ internal object PdfOcrEngine {
         if (engine !in setOf("tesseract", "mlkit-latin", "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai")) {
             error("ไม่รู้จัก OCR Engine: $engine")
         }
-        if (engine != "tesseract" &&
+        if (engine !in setOf("tesseract", "mlkit-latin") &&
             (serverUrl.isBlank() || serverUrl.contains("your-ocr-server.example.com"))
         ) {
             error("กรุณาตั้งค่า OCR Server URL ที่ใช้งานได้ก่อน")

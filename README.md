@@ -1,29 +1,29 @@
 # Epub Maker for Mimee Reader
 
-Android app project for preparing text and exporting EPUB3 books, with OCR planned for later milestones.
+Android app for importing PDFs, recognizing Thai/English text, editing the extracted text, and exporting EPUB3.
 
-## Current milestone
+## Implemented in source (build/device verification pending)
 
-- Android Compose interface with a light blue and white theme.
-- Editable book title, author, and manuscript text.
-- Export edited text to an EPUB3 ZIP package using Android's document picker.
-- Generates EPUB package metadata, navigation, XHTML chapter, and stylesheet.
+- Light blue and white Jetpack Compose interface.
+- PDF import using Android's document picker and PdfRenderer.
+- Page-by-page Tesseract OCR configured for Thai + English.
+- OCR text appears in an editable manuscript, with page markers and progress.
+- EPUB3 export using the Android save dialog.
 
-## Not implemented yet
+## OCR language data
 
-- PDF/image import and page-by-page OCR.
-- Thai and English OCR engines.
-- Multi-page layout preservation and image handling.
-- Custom cover editor and automated APK release.
+The first OCR run downloads Tesseract's Thai and English traineddata files from the tessdata_fast repository into app-private storage. Internet is required for that initial download. OCR recognition itself runs on-device and does not upload PDF pages to an OCR service. The language files remain in the app's private storage for later offline runs.
 
-Do not treat OCR as available in this version. The current export flow expects text to be pasted or typed into the editor.
+## Limitations
+
+- OCR output needs proofreading, especially for complex layouts and low-resolution scans.
+- Current EPUB export creates one text chapter; it does not preserve PDF page layout, illustrations, or custom covers yet.
+- The app has not been declared release-ready until CI build and real-device tests pass.
 
 ## Build
 
-Requirements: JDK 17, Android SDK platform 34, and Gradle 8.7.
+Requirements: JDK 17, Android SDK platform 34, Gradle 8.7.
 
 ```bash
-./gradlew assembleDebug
+gradle assembleDebug
 ```
-
-The debug APK, if the build succeeds, is created at `app/build/outputs/apk/debug/app-debug.apk`.

@@ -143,6 +143,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
 
     val pickSource = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             val resolver = context.contentResolver
             val type = resolver.getType(uri) ?: when (uri.toString().lowercase()) {
                 else -> if (uri.toString().lowercase().endsWith(".pdf")) "application/pdf" else "image/jpeg"
@@ -462,7 +463,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                         .replace(Regex("[^A-Za-z0-9ก-๙._ -]"), "_").take(80) + ".epub"
                     saveEpub.launch(filename)
                 },
-                enabled = state.hasConverted && editorValue.text.isNotBlank() && !state.isProcessing && !state.isExporting,
+                enabled = state.hasConverted && (editorValue.text.isNotBlank() || state.book.allImages().isNotEmpty()) && !state.isProcessing && !state.isExporting,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(17.dp)
             ) {

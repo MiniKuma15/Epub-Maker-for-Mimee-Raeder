@@ -432,6 +432,7 @@ private object EpubWriter {
         val safeTitle = xml(title.trim().ifBlank { "Untitled" })
         val safeAuthor = xml(author.trim().ifBlank { "ไม่ระบุผู้แต่ง" })
         val chapters = parseChapters(manuscript)
+        val language = if (manuscript.any { it in '\u0E00'..'\u0E7F' }) "th" else "en"
         val bookId = "urn:uuid:${UUID.randomUUID()}"
         val modified = java.time.Instant.now().toString()
 
@@ -446,17 +447,17 @@ private object EpubWriter {
             toc.append("<li><a href=\"$file\">${xml(chapter.title)}</a></li>")
         }
         val opf = """<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="th" prefix="dcterms: http://purl.org/dc/terms/">
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="$language" prefix="dcterms: http://purl.org/dc/terms/">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="book-id">$bookId</dc:identifier><dc:title>$safeTitle</dc:title><dc:creator>$safeAuthor</dc:creator>
-<dc:language>th</dc:language><meta property="dcterms:modified">$modified</meta>
+<dc:language>$language</dc:language><meta property="dcterms:modified">$modified</meta>
 </metadata>
 <manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 $manifest<item id="css" href="styles/book.css" media-type="text/css"/></manifest>
 <spine>$spine</spine></package>"""
 
         val nav = """<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="th" lang="th">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="$language" lang="$language">
 <head><title>สารบัญ</title><meta charset="UTF-8"/></head>
 <body><nav epub:type="toc" id="toc"><h1>สารบัญ</h1><ol>$toc</ol></nav></body></html>"""
         val css = """body { font-family: serif; line-height: 1.7; margin: 5%; } h1 { text-align: center; margin: 1em 0 2em; font-size: 1.5em; } p { text-indent: 1em; margin: 0 0 0.8em; }"""

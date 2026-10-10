@@ -1,35 +1,33 @@
 # Epub Maker for Mimee Reader
 
-Android app for importing PDFs, recognizing Thai/English text, editing extracted text, and exporting EPUB3.
+Android EPUB 3 maker built with Kotlin, Jetpack Compose and MVVM.
 
-## Current app features
+## Current implementation
 
-- Import PDF through Android's document picker and render each page for OCR.
-- Local/offline Tesseract OCR after downloading Thai and English language data.
-- Optional server OCR: PaddleOCR, EasyOCR, PaddleOCR-VL, Google Cloud Vision, Gemini Vision, and Google Document AI.
-- OCR progress display and editable manuscript text.
-- Manuscript preview before export.
-- Book title and author metadata.
-- Draft autosave for the manuscript and OCR server settings.
-- EPUB3 export with a navigation table of contents.
-- Split EPUB chapters by adding a line that starts with # followed by a chapter title. Example: # Chapter One.
-- Android debug APK build workflow at .github/workflows/android-build.yml.
+- Manual conversion: selecting a file does not start OCR or conversion. Processing begins only when the user taps **Start Conversion**.
+- Input: PDF, JPG and PNG via Android's Storage Access Framework.
+- PDF text extraction using PDFBox-Android, with page-by-page rendering for scanned pages.
+- Offline OCR using Tesseract for Thai and English; Google ML Kit bundled Latin OCR is also available for Latin-script text. ML Kit's Latin model does not support Thai directly.
+- Online OCR server choices: PaddleOCR, EasyOCR, PaddleOCR-VL, Google Cloud Vision, Gemini Vision and Google Document AI. Online providers require a deployed backend and server-side credentials.
+- Structured EPUB domain model: Book, Chapter, TextBlock, ImageBlock, RichTextRun, ParagraphStyle, BookMetadata and CoverImage.
+- Rich text editor: bold, italic, alignment, first-line indentation and paragraph spacing.
+- Scanned page retention: pages with no embedded text can be embedded as images instead of OCR. Imported images can be kept alongside OCR text.
+- Image Alt Text and Caption editing.
+- Cover selection from the first page of a PDF or a JPG/PNG image.
+- EPUB 3 export with XHTML chapters, CSS, navigation, metadata, embedded images and cover manifest.
+- GitHub Actions builds a debug APK and uploads it as the `epub-maker-debug-apk` artifact.
 
 ## OCR backend
 
-Online and self-hosted OCR engines require a running backend. For lightweight online engines, the backend Dockerfile and requirements-online.txt are provided under ocr-backend. See ocr-backend/README.md for deployment, Google credentials, pricing, and privacy details.
+Online and self-hosted OCR engines require the backend under `ocr-backend`. See `ocr-backend/README.md` for deployment and credentials. Set `OCR_API_TOKEN` on the backend to require Bearer-token authentication. Use HTTPS for exposed servers. Never store Google API keys or service-account credentials in the APK or Git repository.
 
-Set OCR_API_TOKEN on the backend to require Bearer-token authentication, then enter the same token in the app's Server access token field. Use HTTPS for any server exposed over the internet. Never put Google API keys or service-account credentials in the APK or Git repository.
+## Build and verification
 
-## Important limitations
+Pushes to `main` trigger `.github/workflows/android-build.yml`. The workflow runs Gradle unit-test compilation and builds `app/build/outputs/apk/debug/app-debug.apk`; successful runs upload the APK artifact. The build is considered verified only after the workflow reports success. A successful compile alone does not replace testing on real PDFs, Thai OCR samples, image-only inputs and EPUB reader apps.
 
-- The Google services are not ready merely by selecting them in the app; the backend must be deployed and the relevant credentials configured.
-- Google OCR can incur charges and sends page images to Google. Review the provider's current terms, quota, and pricing.
-- Tesseract downloads its Thai and English data files the first time it is used.
-- EPUB output is a reflowable text book; it does not preserve the source PDF's original page layout or illustrations.
-- Chapter splitting is currently based on explicit # Heading lines in the editable manuscript.
-- The repository changes have not yet been verified by a successful Android build or real end-to-end OCR tests. Treat build and runtime verification as remaining acceptance checks.
+## Notes
 
-## Build
-
-Pushes to main trigger the Android build workflow. The debug APK is uploaded as the epub-maker-debug-apk workflow artifact when the build succeeds.
+- OCR accuracy depends on scan quality, fonts, layout and the selected engine.
+- Google OCR can incur charges and transmits page images to the selected provider.
+- Tesseract downloads Thai and English language data the first time it runs; after the data is cached, OCR runs locally.
+- The editor preserves inline rich-text runs in the EPUB model. The EPUB is reflowable and does not attempt to reproduce the exact PDF page layout.

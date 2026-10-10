@@ -458,7 +458,7 @@ $manifest<item id="css" href="styles/book.css" media-type="text/css"/></manifest
             chapters.forEachIndexed { index, chapter ->
                 val paragraphs = chapter.body.split(Regex("\\r?\\n\\s*\\r?\\n"))
                     .map { it.trim() }.filter { it.isNotEmpty() }
-                    .joinToString("\n") { "<p>${xml(it).replace("\\n", "<br/>")}</p>" }
+                    .joinToString("\n") { "<p>\${xml(it).replace("\n", "<br/>")}</p>" }
                 val xhtml = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="th" lang="th">
 <head><title>${xml(chapter.title)}</title><meta charset="UTF-8"/><link rel="stylesheet" type="text/css" href="../styles/book.css"/></head>
@@ -478,13 +478,13 @@ $manifest<item id="css" href="styles/book.css" media-type="text/css"/></manifest
             if (content.isNotEmpty()) chapters.add(Chapter(currentTitle, content))
             body.clear()
         }
-        text.replace("\\r\\n", "\\n").lines().forEach { line ->
+        text.replace("\r\n", "\n").lines().forEach { line ->
             val heading = line.trim().takeIf { it.startsWith("# ") }?.removePrefix("# ")?.trim()
             if (!heading.isNullOrBlank()) {
                 flush()
                 currentTitle = heading
             } else {
-                body.append(line).append('\\n')
+                body.append(line).append('\n')
             }
         }
         flush()

@@ -1,8 +1,8 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 python-multipart>=0.0.9
-# Install one or more model runtimes based on the deployment target.
-# PaddleOCR 3.x includes PaddleX; PaddleOCR-VL may require additional model assets.
+google-auth>=2.35,<3
+# Self-hosted OCR engines. Install the backend on a machine compatible with these runtimes.
 paddleocr>=3.0,<4
 paddlepaddle>=3.0,<4
 paddlex>=3.0,<4

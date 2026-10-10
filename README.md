@@ -31,3 +31,6 @@ Pushes to `main` trigger `.github/workflows/android-build.yml`. The workflow run
 - Google OCR can incur charges and transmits page images to the selected provider.
 - Tesseract downloads Thai and English language data the first time it runs; after the data is cached, OCR runs locally.
 - The editor preserves inline rich-text runs in the EPUB model. The EPUB is reflowable and does not attempt to reproduce the exact PDF page layout.
+
+
+Build validation branch created to run the repository's GitHub Actions checks against the current app sources.

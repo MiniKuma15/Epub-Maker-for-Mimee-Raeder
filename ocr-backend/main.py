@@ -1,5 +1,6 @@
 import base64
 import json
+import hmac
 import os
 import tempfile
 from enum import Enum
@@ -8,7 +9,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
@@ -53,7 +54,17 @@ def engines() -> dict[str, Any]:
 
 
 @app.post("/ocr", response_model=OcrResponse)
-async def recognize(engine: Engine, file: UploadFile = File(...)) -> OcrResponse:
+async def recognize(
+    engine: Engine,
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+) -> OcrResponse:
+    expected_token = os.getenv("OCR_API_TOKEN", "").strip()
+    if expected_token:
+        supplied_token = (authorization or "").removeprefix("Bearer ").strip()
+        if not hmac.compare_digest(supplied_token, expected_token):
+            raise HTTPException(status_code=401, detail="Invalid or missing OCR API token")
+
     suffix = Path(file.filename or "upload.png").suffix or ".png"
     data = await file.read()
     if not data:

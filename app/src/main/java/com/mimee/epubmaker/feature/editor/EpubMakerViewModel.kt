@@ -138,6 +138,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                 _state.update { current ->
                     current.copy(
                         book = book.copy(
+                            coverImage = current.book.coverImage ?: book.coverImage,
                             metadata = book.metadata.copy(
                                 title = current.title.ifBlank { book.metadata.title },
                                 authors = current.author.takeIf { it.isNotBlank() }?.let(::listOf).orEmpty()

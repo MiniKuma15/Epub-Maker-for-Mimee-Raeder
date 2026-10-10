@@ -60,9 +60,12 @@ class EpubBookWriter(private val context: Context) {
         val navItems = StringBuilder()
 
         if (coverPath != null) {
-            manifest.append("<item id=\"cover-image\" href=\"images/cover.${coverPath.substringAfterLast('.')} \" media-type=\"${xml(book.coverImage!!.mimeType)}\" properties=\"cover-image\"/>".replace("cover.${coverPath.substringAfterLast('.')} \"", "cover.${coverPath.substringAfterLast('.')} \"").trim())
+            val cover = book.coverImage!!
+            val coverHref = "images/cover.${coverPath.substringAfterLast('.')}"
+            manifest.append("<item id=\"cover-image\" href=\"${xml(coverHref)}\" media-type=\"${xml(cover.mimeType)}\" properties=\"cover-image\"/>")
         }
         images.forEach { (path, _) ->
+            if (path == coverPath) return@forEach
             val relative = path.removePrefix("OEBPS/")
             val id = "img" + relative.hashCode().toUInt().toString(16)
             val mime = mimeForPath(path)
@@ -204,7 +207,8 @@ class EpubBookWriter(private val context: Context) {
                             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                             try {
                                 bitmap.eraseColor(android.graphics.Color.WHITE)
-                                page.render(bitmap, null, Matrix(), PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                val matrix = Matrix().apply { setScale(width.toFloat() / page.width, height.toFloat() / page.height) }
+                            page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                                 ByteArrayOutputStream().use { out ->
                                     bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
                                     out.toByteArray()

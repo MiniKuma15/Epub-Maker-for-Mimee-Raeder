@@ -34,3 +34,5 @@ Pushes to `main` trigger `.github/workflows/android-build.yml`. The workflow run
 
 
 Build validation branch created to run the repository's GitHub Actions checks against the current app sources. The validation commit was refreshed after fixing the initial compiler errors.
+
+Validation refresh: include the latest image-preview and editor-state fixes from main.

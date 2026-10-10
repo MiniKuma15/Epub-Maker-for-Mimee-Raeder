@@ -340,7 +340,7 @@ private fun EpubMakerScreen(
                     androidx.compose.material3.Icon(Icons.Default.TextFields, null, tint = Blue)
                     Text("  ต้นฉบับข้อความ", fontWeight = FontWeight.SemiBold, color = Ink)
                 }
-                Text("ตรวจแก้ข้อความ OCR ในช่องนี้ได้ก่อนส่งออกเป็น EPUB", color = Muted, fontSize = 13.sp)
+                Text("ตรวจแก้ข้อความ OCR ได้ก่อนส่งออก หากขึ้นต้นบรรทัดด้วย # ชื่อบท ระบบจะแยกเป็นบทและสร้างสารบัญให้", color = Muted, fontSize = 13.sp)
                 OutlinedTextField(
                     value = manuscript,
                     onValueChange = { manuscript = it },

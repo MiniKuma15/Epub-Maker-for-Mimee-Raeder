@@ -38,7 +38,10 @@ internal object PdfOcrEngine {
             error("กรุณาตั้งค่า OCR Server URL ที่ใช้งานได้ก่อน")
         }
 
-        val api = if (engine == "tesseract") createTesseract(context) else null
+        val api = if (engine == "tesseract") {
+            onProgress(0, 0) // Show setup status while language data is checked/downloaded.
+            createTesseract(context, onProgress)
+        } else null
         try {
             val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
                 ?: error("เปิดไฟล์ PDF ไม่ได้")
@@ -83,14 +86,17 @@ internal object PdfOcrEngine {
         }
     }
 
-    private fun createTesseract(context: Context): TessBaseAPI {
+    private fun createTesseract(context: Context, onProgress: (Int, Int) -> Unit): TessBaseAPI {
         val dataRoot = File(context.filesDir, DATA_DIR)
         val languageDir = File(dataRoot, LANG_DIR)
         if (!languageDir.exists() && !languageDir.mkdirs()) {
             error("สร้างโฟลเดอร์ข้อมูล OCR ไม่สำเร็จ")
         }
+        onProgress(-1, 0)
         ensureLanguageFile(languageDir, "tha")
+        onProgress(-2, 0)
         ensureLanguageFile(languageDir, "eng")
+        onProgress(0, -1)
         val api = TessBaseAPI()
         if (!api.init(dataRoot.absolutePath, "tha+eng")) {
             api.end()

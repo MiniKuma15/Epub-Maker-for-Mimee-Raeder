@@ -7,32 +7,37 @@ import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import com.googlecode.tesseract.android.TessBaseAPI
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
-/** Page-by-page PDF OCR; language data is cached in app-private storage. */
+/** PDF page renderer with on-device Tesseract and selectable remote OCR engines. */
 internal object PdfOcrEngine {
     private const val DATA_DIR = "tesseract"
     private const val LANG_DIR = "tessdata"
     private const val BASE_URL = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/"
 
-    fun recognize(context: Context, uri: Uri, onProgress: (Int, Int) -> Unit): String {
-        val dataRoot = File(context.filesDir, DATA_DIR)
-        val languageDir = File(dataRoot, LANG_DIR)
-        if (!languageDir.exists() && !languageDir.mkdirs()) {
-            error("สร้างโฟลเดอร์ข้อมูล OCR ไม่สำเร็จ")
+    fun recognize(
+        context: Context,
+        uri: Uri,
+        engine: String,
+        serverUrl: String,
+        onProgress: (Int, Int) -> Unit
+    ): String {
+        if (engine !in setOf("tesseract", "paddleocr", "easyocr", "paddleocr-vl")) {
+            error("ไม่รู้จัก OCR Engine: $engine")
         }
-        ensureLanguageFile(languageDir, "tha")
-        ensureLanguageFile(languageDir, "eng")
-
-        val api = TessBaseAPI()
-        if (!api.init(dataRoot.absolutePath, "tha+eng")) {
-            api.end()
-            error("เริ่มต้น OCR ไม่สำเร็จ ตรวจสอบไฟล์ข้อมูลภาษา")
+        if (engine != "tesseract" &&
+            (serverUrl.isBlank() || serverUrl.contains("your-ocr-server.example.com"))
+        ) {
+            error("กรุณาตั้งค่า OCR Server URL ที่ใช้งานได้ก่อน")
         }
 
+        val api = if (engine == "tesseract") createTesseract(context) else null
         try {
             val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
                 ?: error("เปิดไฟล์ PDF ไม่ได้")
@@ -52,11 +57,15 @@ internal object PdfOcrEngine {
                             }
                             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                             try {
-                                api.setImage(bitmap)
-                                val recognized = api.getUTF8Text() ?: ""
+                                val recognized = if (api != null) {
+                                    api.setImage(bitmap)
+                                    api.getUTF8Text() ?: ""
+                                } else {
+                                    recognizeRemote(bitmap, engine, serverUrl)
+                                }
                                 if (recognized.isNotBlank()) {
                                     if (output.isNotEmpty()) output.append("\n\n")
-                                    output.append("— หน้า \${index + 1} —\n")
+                                    output.append("— หน้า ${index + 1} —\n")
                                     output.append(recognized.trim())
                                 }
                             } finally {
@@ -69,7 +78,60 @@ internal object PdfOcrEngine {
                 }
             }
         } finally {
+            api?.end()
+        }
+    }
+
+    private fun createTesseract(context: Context): TessBaseAPI {
+        val dataRoot = File(context.filesDir, DATA_DIR)
+        val languageDir = File(dataRoot, LANG_DIR)
+        if (!languageDir.exists() && !languageDir.mkdirs()) {
+            error("สร้างโฟลเดอร์ข้อมูล OCR ไม่สำเร็จ")
+        }
+        ensureLanguageFile(languageDir, "tha")
+        ensureLanguageFile(languageDir, "eng")
+        val api = TessBaseAPI()
+        if (!api.init(dataRoot.absolutePath, "tha+eng")) {
             api.end()
+            error("เริ่มต้น OCR ไม่สำเร็จ ตรวจสอบไฟล์ข้อมูลภาษา")
+        }
+        return api
+    }
+
+    private fun recognizeRemote(bitmap: Bitmap, engine: String, serverUrl: String): String {
+        val boundary = "----EpubMakerOCR${System.currentTimeMillis()}"
+        val endpoint = serverUrl.trim().trimEnd('/') + "/ocr?engine=" +
+            URLEncoder.encode(engine, "UTF-8")
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 20_000
+            readTimeout = 180_000
+            doOutput = true
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            val imageBytes = ByteArrayOutputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                out.toByteArray()
+            }
+            connection.outputStream.use { output ->
+                output.write("--$boundary\r\n".toByteArray())
+                output.write("Content-Disposition: form-data; name=\"file\"; filename=\"page.png\"\r\n".toByteArray())
+                output.write("Content-Type: image/png\r\n\r\n".toByteArray())
+                output.write(imageBytes)
+                output.write("\r\n--$boundary--\r\n".toByteArray())
+            }
+            val status = connection.responseCode
+            val responseStream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val response = responseStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (status !in 200..299) {
+                val detail = try { JSONObject(response).optString("detail", response) } catch (_: Exception) { response }
+                error("OCR Server ตอบกลับ HTTP $status: $detail")
+            }
+            return JSONObject(response).optString("text", "")
+        } finally {
+            connection.disconnect()
         }
     }
 
@@ -85,7 +147,7 @@ internal object PdfOcrEngine {
         try {
             connection.connect()
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                error("ดาวน์โหลดข้อมูลภาษา $language ไม่สำเร็จ (HTTP \${connection.responseCode})")
+                error("ดาวน์โหลดข้อมูลภาษา $language ไม่สำเร็จ (HTTP ${connection.responseCode})")
             }
             connection.inputStream.use { input ->
                 FileOutputStream(temporary).use { output -> input.copyTo(output) }

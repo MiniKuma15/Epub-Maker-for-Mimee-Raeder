@@ -215,7 +215,7 @@ private fun EpubMakerScreen(
                     Text("  นำเข้า PDF และอ่านข้อความ", fontWeight = FontWeight.SemiBold, color = Ink)
                 }
                 Text(
-                    "เลือก OCR ได้ 4 แบบ: Tesseract บนเครื่อง หรือ PaddleOCR, EasyOCR และ PaddleOCR-VL ผ่านเซิร์ฟเวอร์",
+                    "เลือก OCR แบบออฟไลน์ โมเดลบนเซิร์ฟเวอร์ หรือบริการออนไลน์ของ Google",
                     color = Muted,
                     fontSize = 13.sp
                 )
@@ -225,7 +225,10 @@ private fun EpubMakerScreen(
                         "tesseract" to "Tesseract (ออฟไลน์)",
                         "paddleocr" to "PaddleOCR",
                         "easyocr" to "EasyOCR",
-                        "paddleocr-vl" to "PaddleOCR-VL (เอกสารซับซ้อน)"
+                        "paddleocr-vl" to "PaddleOCR-VL (เอกสารซับซ้อน)",
+                        "google-vision" to "Google Cloud Vision (ออนไลน์)",
+                        "gemini" to "Google Gemini Vision (ออนไลน์)",
+                        "google-document-ai" to "Google Document AI (ออนไลน์)"
                     ).forEach { (id, label) ->
                         OutlinedButton(
                             onClick = { ocrEngine = id },
@@ -274,7 +277,7 @@ private fun EpubMakerScreen(
                     Text(ocrStatus, color = Muted, fontSize = 13.sp)
                 }
                 Text(
-                    if (ocrEngine == "tesseract") "หมายเหตุ: ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยและอังกฤษ หลังจากนั้น Tesseract ทำงานบนเครื่องได้" else "หมายเหตุ: PDF แต่ละหน้าจะถูกส่งไปยัง OCR Server ที่คุณกำหนด",
+                    if (ocrEngine == "tesseract") "หมายเหตุ: ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยและอังกฤษ หลังจากนั้น Tesseract ทำงานบนเครื่องได้" else "หมายเหตุ: PDF แต่ละหน้าจะถูกส่งไปยัง OCR Server ที่คุณกำหนด บริการ Google อาจมีค่าใช้จ่าย",
                     color = Muted,
                     fontSize = 12.sp
                 )
@@ -346,8 +349,8 @@ private fun EpubMakerScreen(
                         Text("OCR ทำงานบนเครื่อง", fontWeight = FontWeight.SemiBold, color = Ink)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            if (ocrEngine == "tesseract") "Tesseract ทำงานบนเครื่อง ไม่ส่งหน้า PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก" else "โหมดออนไลน์ส่งภาพหน้าหนังสือไปยังเซิร์ฟเวอร์ OCR ที่คุณตั้งค่าไว้"
-                            color = Ink,
+                            if (ocrEngine == "tesseract") "Tesseract ทำงานบนเครื่อง ไม่ส่งหน้า PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก" else "โหมดออนไลน์ส่งภาพหน้าหนังสือไปยัง OCR Server ที่ตั้งค่าไว้ โดย Google engines จะส่งต่อภาพไปยัง Google API"
+                            , color = Ink,
                             fontSize = 13.sp
                         )
                         OutlinedButton(

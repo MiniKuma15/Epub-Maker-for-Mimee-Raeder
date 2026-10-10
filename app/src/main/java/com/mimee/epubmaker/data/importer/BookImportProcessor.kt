@@ -208,7 +208,7 @@ class BookImportProcessor(private val context: Context) {
     }
 
     private fun splitParagraphs(value: String): List<String> =
-        value.replace("\r\n", "\n").split(Regex("\n\s*\n"))
+        value.replace("\r\n", "\n").split(Regex("""\n\s*\n"""))
             .map { it.trim() }.filter { it.isNotBlank() }
 
     private fun renderPage(page: PdfRenderer.Page): Bitmap {

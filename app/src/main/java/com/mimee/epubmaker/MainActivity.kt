@@ -89,13 +89,15 @@ class MainActivity : ComponentActivity() {
             ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Sky) {
                     EpubMakerScreen(
-                        onOcrPdf = { uri, progress, completed, failed ->
+                        onOcrPdf = { uri, engine, serverUrl, progress, completed, failed ->
                             lifecycleScope.launch {
                                 try {
                                     val text = withContext(Dispatchers.IO) {
                                         PdfOcrEngine.recognize(
                                             context = this@MainActivity,
                                             uri = uri,
+                                            engine = engine,
+                                            serverUrl = serverUrl,
                                             onProgress = { current, total ->
                                                 runOnUiThread { progress(current, total) }
                                             }
@@ -131,10 +133,12 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EpubMakerScreen(
-    onOcrPdf: (Uri, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
+    onOcrPdf: (Uri, String, String, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
     onExport: (String, String, String, Uri) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
+    var ocrEngine by remember { mutableStateOf("tesseract") }
+    var ocrServerUrl by remember { mutableStateOf("https://your-ocr-server.example.com") }
     var author by remember { mutableStateOf("") }
     var manuscript by remember { mutableStateOf("") }
     var showHelp by remember { mutableStateOf(true) }
@@ -151,6 +155,8 @@ private fun EpubMakerScreen(
             ocrStatus = "กำลังเตรียม OCR ภาษาไทยและอังกฤษ…"
             onOcrPdf(
                 uri,
+                ocrEngine,
+                ocrServerUrl,
                 { current, total ->
                     ocrProgress = if (total > 0) current.toFloat() / total else 0f
                     ocrStatus = "กำลังอ่านข้อความ หน้า $current จาก $total"
@@ -209,10 +215,47 @@ private fun EpubMakerScreen(
                     Text("  นำเข้า PDF และอ่านข้อความ", fontWeight = FontWeight.SemiBold, color = Ink)
                 }
                 Text(
-                    "เลือกไฟล์ PDF ระบบจะอ่านข้อความทีละหน้าและนำผลมาใส่ในช่องแก้ไขด้านล่าง ใช้ OCR ภาษาไทย + อังกฤษ",
+                    "เลือก OCR ได้ 4 แบบ: Tesseract บนเครื่อง หรือ PaddleOCR, EasyOCR และ PaddleOCR-VL ผ่านเซิร์ฟเวอร์",
                     color = Muted,
                     fontSize = 13.sp
                 )
+                Text("เลือก OCR Engine", color = Ink, fontWeight = FontWeight.Medium)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "tesseract" to "Tesseract (ออฟไลน์)",
+                        "paddleocr" to "PaddleOCR",
+                        "easyocr" to "EasyOCR",
+                        "paddleocr-vl" to "PaddleOCR-VL (เอกสารซับซ้อน)"
+                    ).forEach { (id, label) ->
+                        OutlinedButton(
+                            onClick = { ocrEngine = id },
+                            enabled = !ocrRunning,
+                            modifier = Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, if (ocrEngine == id) Blue else Line),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (ocrEngine == id) Blue else Ink
+                            )
+                        ) {
+                            Text(if (ocrEngine == id) "✓  $label" else label)
+                        }
+                    }
+                }
+                if (ocrEngine != "tesseract") {
+                    OutlinedTextField(
+                        value = ocrServerUrl,
+                        onValueChange = { ocrServerUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("OCR Server URL") },
+                        placeholder = { Text("https://your-server.example.com") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                    Text(
+                        "โมเดลออนไลน์ต้องติดตั้งและเปิด Backend ก่อน ใช้ HTTPS ในระบบจริง",
+                        color = Muted,
+                        fontSize = 12.sp
+                    )
+                }
                 Button(
                     onClick = { pdfLauncher.launch(arrayOf("application/pdf")) },
                     enabled = !ocrRunning,
@@ -231,7 +274,7 @@ private fun EpubMakerScreen(
                     Text(ocrStatus, color = Muted, fontSize = 13.sp)
                 }
                 Text(
-                    "หมายเหตุ: ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยและอังกฤษผ่านอินเทอร์เน็ต หลังจากนั้น OCR ทำงานบนเครื่องได้",
+                    if (ocrEngine == "tesseract") "หมายเหตุ: ครั้งแรกต้องดาวน์โหลดข้อมูลภาษาไทยและอังกฤษ หลังจากนั้น Tesseract ทำงานบนเครื่องได้" else "หมายเหตุ: PDF แต่ละหน้าจะถูกส่งไปยัง OCR Server ที่คุณกำหนด",
                     color = Muted,
                     fontSize = 12.sp
                 )
@@ -303,7 +346,7 @@ private fun EpubMakerScreen(
                         Text("OCR ทำงานบนเครื่อง", fontWeight = FontWeight.SemiBold, color = Ink)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "ระบบใช้ Tesseract OCR กับข้อมูลภาษาไทยและอังกฤษ ไม่ส่งไฟล์ PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก",
+                            if (ocrEngine == "tesseract") "Tesseract ทำงานบนเครื่อง ไม่ส่งหน้า PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก" else "โหมดออนไลน์ส่งภาพหน้าหนังสือไปยังเซิร์ฟเวอร์ OCR ที่คุณตั้งค่าไว้"
                             color = Ink,
                             fontSize = 13.sp
                         )

@@ -1,6 +1,8 @@
 package com.mimee.epubmaker
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
@@ -12,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -70,6 +74,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,6 +82,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -84,6 +91,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.unit.dp
@@ -175,6 +184,8 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
             alignment = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.alignment ?: TextAlignment.START
             indent = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.firstLineIndentEm ?: 1f
             spacing = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.spacingAfterEm ?: 0.8f
+        } else {
+            editorValue = TextFieldValue("")
         }
     }
 
@@ -421,6 +432,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                             if (state.author.isNotBlank()) Text(state.author, color = Muted, fontSize = 13.sp)
                             Text(editorValue.annotatedString, fontSize = 16.sp, lineHeight = 28.sp, color = Ink)
                             state.book.allImages().forEach { image ->
+                                ImportedImagePreview(image.image.sourceUri, image.image.altText)
                                 Text("ภาพ: ${image.image.altText}", color = Muted, fontSize = 12.sp)
                                 if (image.image.caption.isNotBlank()) Text(image.image.caption, color = Muted, fontSize = 12.sp)
                             }
@@ -437,6 +449,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                     Text("ฝังภาพใน EPUB: ${images.size} ภาพ", color = Blue, fontWeight = FontWeight.SemiBold)
                     images.forEachIndexed { index, image ->
                         Text("ภาพ ${index + 1}: ${image.image.fileName}", fontWeight = FontWeight.Medium, color = Ink)
+                        ImportedImagePreview(image.image.sourceUri, image.image.altText)
                         OutlinedTextField(
                             value = image.image.altText,
                             onValueChange = { vm.updateImageDescription(image.id, altText = it) },
@@ -478,6 +491,31 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
             Text("สร้างไฟล์ EPUB 3 พร้อมข้อความ รูปภาพ สารบัญ และ Metadata", modifier = Modifier.align(Alignment.CenterHorizontally), color = Muted, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp))
         }
+    }
+}
+
+
+@Composable
+private fun ImportedImagePreview(sourceUri: String, altText: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bitmap by produceState<Bitmap?>(initialValue = null, sourceUri) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.openInputStream(Uri.parse(sourceUri))?.use { input ->
+                    BitmapFactory.decodeStream(input)
+                }
+            }.getOrNull()
+        }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = altText,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(12.dp))
+        )
+    } else {
+        Text("ไม่สามารถแสดงตัวอย่างภาพได้", color = Muted, fontSize = 12.sp)
     }
 }
 

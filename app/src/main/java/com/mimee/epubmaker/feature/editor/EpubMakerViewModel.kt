@@ -197,31 +197,87 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun updateManuscript(text: String, runs: List<RichTextRun>, paragraphStyle: ParagraphStyle) {
         _state.update { current ->
-            val oldChapter = current.book.orderedChapters().firstOrNull() ?: Chapter(title = current.title.ifBlank { "เนื้อหา" })
-            val firstTextIndex = oldChapter.contents.indexOfFirst { it is TextBlock }.let { if (it < 0) oldChapter.contents.size else it }
-            val imageBlocks = oldChapter.contents.filterIsInstance<ImageBlock>()
-            val newTextBlock = TextBlock(
-                order = firstTextIndex,
-                runs = if (runs.isEmpty() && text.isNotEmpty()) listOf(RichTextRun(text)) else runs,
-                paragraphStyle = paragraphStyle
-            )
-            val newContents = oldChapter.contents.filterNot { it is TextBlock }.toMutableList().apply {
-                add(firstTextIndex.coerceAtMost(size), newTextBlock)
-            }.mapIndexed { index, item ->
-                when (item) {
-                    is TextBlock -> item.copy(order = index)
-                    is ImageBlock -> item.copy(order = index)
+            val oldChapter = current.book.orderedChapters().firstOrNull()
+                ?: Chapter(title = current.title.ifBlank { "เนื้อหา" })
+            val normalizedRuns = if (runs.isEmpty() && text.isNotEmpty()) listOf(RichTextRun(text)) else runs
+            val paragraphRuns = splitRichRunsIntoParagraphs(text, normalizedRuns)
+            val replacements = paragraphRuns.mapIndexed { index, paragraph ->
+                TextBlock(
+                    order = index,
+                    runs = paragraph,
+                    paragraphStyle = paragraphStyle
+                )
+            }
+            val oldTextCount = oldChapter.contents.count { it is TextBlock }
+            val output = mutableListOf<com.mimee.epubmaker.domain.model.BookContent>()
+            var nextReplacement = 0
+            var insertedExtraParagraphs = false
+
+            oldChapter.orderedContents().forEach { item ->
+                if (item is TextBlock) {
+                    if (nextReplacement < replacements.size) {
+                        output += replacements[nextReplacement++].copy(order = output.size)
+                    }
+                } else {
+                    if (!insertedExtraParagraphs && nextReplacement >= oldTextCount && replacements.size > nextReplacement) {
+                        while (nextReplacement < replacements.size) {
+                            output += replacements[nextReplacement++].copy(order = output.size)
+                        }
+                        insertedExtraParagraphs = true
+                    }
+                    output += item
                 }
             }
+            while (nextReplacement < replacements.size) {
+                output += replacements[nextReplacement++].copy(order = output.size)
+            }
+
             val updatedChapter = oldChapter.copy(
                 title = current.title.ifBlank { oldChapter.title.ifBlank { "เนื้อหา" } },
-                contents = newContents
+                contents = output.mapIndexed { index, item ->
+                    when (item) {
+                        is TextBlock -> item.copy(order = index)
+                        is ImageBlock -> item.copy(order = index)
+                    }
+                }
             )
             current.copy(book = current.book.copy(
-                metadata = current.book.metadata.copy(title = current.title, authors = current.author.takeIf { it.isNotBlank() }?.let(::listOf).orEmpty()),
+                metadata = current.book.metadata.copy(
+                    title = current.title,
+                    authors = current.author.takeIf { it.isNotBlank() }?.let(::listOf).orEmpty()
+                ),
                 chapters = listOf(updatedChapter) + current.book.orderedChapters().drop(1),
                 modifiedAt = Instant.now()
             ))
+        }
+    }
+
+    private fun splitRichRunsIntoParagraphs(text: String, runs: List<RichTextRun>): List<List<RichTextRun>> {
+        if (text.isBlank()) return emptyList()
+        val ranges = mutableListOf<Pair<Int, Int>>()
+        val separator = Regex("\\n[ \\t]*\\n+")
+        var paragraphStart = 0
+        separator.findAll(text).forEach { match ->
+            if (match.range.first > paragraphStart) ranges += paragraphStart to match.range.first
+            paragraphStart = match.range.last + 1
+        }
+        if (paragraphStart < text.length) ranges += paragraphStart to text.length
+        if (ranges.isEmpty()) ranges += 0 to text.length
+
+        return ranges.map { (start, end) ->
+            var runOffset = 0
+            val pieces = mutableListOf<RichTextRun>()
+            runs.forEach { run ->
+                val runStart = runOffset
+                val runEnd = runOffset + run.text.length
+                runOffset = runEnd
+                val overlapStart = maxOf(start, runStart)
+                val overlapEnd = minOf(end, runEnd)
+                if (overlapStart < overlapEnd) {
+                    pieces += run.copy(text = run.text.substring(overlapStart - runStart, overlapEnd - runStart))
+                }
+            }
+            if (pieces.isEmpty()) listOf(RichTextRun(text.substring(start, end))) else pieces
         }
     }
 

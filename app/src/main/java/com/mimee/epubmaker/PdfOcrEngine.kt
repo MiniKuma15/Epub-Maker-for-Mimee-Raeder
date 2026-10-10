@@ -26,6 +26,7 @@ internal object PdfOcrEngine {
         uri: Uri,
         engine: String,
         serverUrl: String,
+        serverToken: String,
         onProgress: (Int, Int) -> Unit
     ): String {
         if (engine !in setOf("tesseract", "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai")) {
@@ -61,7 +62,7 @@ internal object PdfOcrEngine {
                                     api.setImage(bitmap)
                                     api.getUTF8Text() ?: ""
                                 } else {
-                                    recognizeRemote(bitmap, engine, serverUrl)
+                                    recognizeRemote(bitmap, engine, serverUrl, serverToken)
                                 }
                                 if (recognized.isNotBlank()) {
                                     if (output.isNotEmpty()) output.append("\n\n")
@@ -98,7 +99,7 @@ internal object PdfOcrEngine {
         return api
     }
 
-    private fun recognizeRemote(bitmap: Bitmap, engine: String, serverUrl: String): String {
+    private fun recognizeRemote(bitmap: Bitmap, engine: String, serverUrl: String, serverToken: String): String {
         val boundary = "----EpubMakerOCR${System.currentTimeMillis()}"
         val endpoint = serverUrl.trim().trimEnd('/') + "/ocr?engine=" +
             URLEncoder.encode(engine, "UTF-8")
@@ -109,6 +110,7 @@ internal object PdfOcrEngine {
             doOutput = true
             setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
             setRequestProperty("Accept", "application/json")
+            if (serverToken.isNotBlank()) setRequestProperty("Authorization", "Bearer ${serverToken.trim()}")
         }
         try {
             val imageBytes = ByteArrayOutputStream().use { out ->

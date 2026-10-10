@@ -388,7 +388,7 @@ private fun EpubMakerScreen(
                             Text(title.ifBlank { "Untitled" }, fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                             if (author.isNotBlank()) Text(author, color = Muted, fontSize = 13.sp)
                             Text(
-                                manuscript.lines().joinToString("\\n") { it.removePrefix("# ") },
+                                manuscript.lines().joinToString("\n") { it.removePrefix("# ") },
                                 color = Ink,
                                 fontSize = 16.sp
                             )

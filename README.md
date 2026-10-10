@@ -8,6 +8,7 @@ Android app for importing PDFs, recognizing Thai/English text, editing extracted
 - Local/offline Tesseract OCR after downloading Thai and English language data.
 - Optional server OCR: PaddleOCR, EasyOCR, PaddleOCR-VL, Google Cloud Vision, Gemini Vision, and Google Document AI.
 - OCR progress display and editable manuscript text.
+- Manuscript preview before export.
 - Book title and author metadata.
 - Draft autosave for the manuscript and OCR server settings.
 - EPUB3 export with a navigation table of contents.

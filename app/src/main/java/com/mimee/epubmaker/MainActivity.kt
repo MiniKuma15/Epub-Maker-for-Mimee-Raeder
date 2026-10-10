@@ -349,7 +349,7 @@ private fun EpubMakerScreen(
                     Text("  ต้นฉบับข้อความ", fontWeight = FontWeight.SemiBold, color = Ink)
                 }
                 Text("ตรวจแก้ข้อความ OCR ได้ก่อนส่งออก หากขึ้นต้นบรรทัดด้วย # ชื่อบท ระบบจะแยกเป็นบทและสร้างสารบัญให้", color = Muted, fontSize = 13.sp)
-                Text("จำนวนตัวอักษร: ${manuscript.length} • จำนวนบท: ${manuscript.lines().count { it.trim().startsWith(\"# \" ) }}", color = Muted, fontSize = 12.sp)
+                Text("จำนวนตัวอักษร: ${manuscript.length} • จำนวนบท: $chapterCount", color = Muted, fontSize = 12.sp)
                 OutlinedTextField(
                     value = manuscript,
                     onValueChange = { manuscript = it },

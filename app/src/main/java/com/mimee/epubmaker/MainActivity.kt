@@ -498,7 +498,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
 @Composable
 private fun ImportedImagePreview(sourceUri: String, altText: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val bitmap by produceState<Bitmap?>(initialValue = null, sourceUri) {
+    val bitmap by produceState<Bitmap?>(null, sourceUri) {
         value = withContext(Dispatchers.IO) {
             runCatching {
                 context.contentResolver.openInputStream(Uri.parse(sourceUri))?.use { input ->

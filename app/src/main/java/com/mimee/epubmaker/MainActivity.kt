@@ -114,17 +114,21 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onExport = { title, author, text, uri ->
-                            try {
-                                contentResolver.openOutputStream(uri)?.use { output ->
-                                    EpubWriter.write(output, title, author, text)
-                                } ?: error("ไม่สามารถเขียนไฟล์ได้")
-                                Toast.makeText(this, "ส่งออก EPUB สำเร็จ", Toast.LENGTH_LONG).show()
-                            } catch (e: Exception) {
-                                Toast.makeText(
-                                    this,
-                                    "ส่งออกไม่สำเร็จ: ${e.localizedMessage ?: "เกิดข้อผิดพลาด"}",
-                                    Toast.LENGTH_LONG
-                                ).show()
+                            lifecycleScope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        contentResolver.openOutputStream(uri)?.use { output ->
+                                            EpubWriter.write(output, title, author, text)
+                                        } ?: error("ไม่สามารถเขียนไฟล์ได้")
+                                    }
+                                    Toast.makeText(this@MainActivity, "ส่งออก EPUB สำเร็จ", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "ส่งออกไม่สำเร็จ: ${e.localizedMessage ?: "เกิดข้อผิดพลาด"}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }
                         }
                     )
@@ -143,8 +147,8 @@ private fun EpubMakerScreen(
 ) {
     val draftPrefs = remember(context) { context.getSharedPreferences("epub_maker_draft", Context.MODE_PRIVATE) }
     var title by remember { mutableStateOf(draftPrefs.getString("title", "") ?: "") }
-    var ocrEngine by remember { mutableStateOf("tesseract") }
-    var ocrServerUrl by remember { mutableStateOf("https://your-ocr-server.example.com") }
+    var ocrEngine by remember { mutableStateOf(draftPrefs.getString("ocrEngine", "tesseract") ?: "tesseract") }
+    var ocrServerUrl by remember { mutableStateOf(draftPrefs.getString("ocrServerUrl", "https://your-ocr-server.example.com") ?: "https://your-ocr-server.example.com") }
     var author by remember { mutableStateOf(draftPrefs.getString("author", "") ?: "") }
     var manuscript by remember { mutableStateOf(draftPrefs.getString("manuscript", "") ?: "") }
     var showHelp by remember { mutableStateOf(true) }
@@ -152,12 +156,14 @@ private fun EpubMakerScreen(
     var ocrStatus by remember { mutableStateOf("เลือก PDF เพื่อเริ่มอ่านข้อความ") }
     var ocrProgress by remember { mutableStateOf(0f) }
 
-    LaunchedEffect(title, author, manuscript) {
+    LaunchedEffect(title, author, manuscript, ocrEngine, ocrServerUrl) {
         delay(400)
         draftPrefs.edit()
             .putString("title", title)
             .putString("author", author)
             .putString("manuscript", manuscript)
+            .putString("ocrEngine", ocrEngine)
+            .putString("ocrServerUrl", ocrServerUrl)
             .apply()
     }
 
@@ -341,6 +347,7 @@ private fun EpubMakerScreen(
                     Text("  ต้นฉบับข้อความ", fontWeight = FontWeight.SemiBold, color = Ink)
                 }
                 Text("ตรวจแก้ข้อความ OCR ได้ก่อนส่งออก หากขึ้นต้นบรรทัดด้วย # ชื่อบท ระบบจะแยกเป็นบทและสร้างสารบัญให้", color = Muted, fontSize = 13.sp)
+                Text("จำนวนตัวอักษร: ${manuscript.length} • จำนวนบท: ${manuscript.lines().count { it.trim().startsWith(\"# \" ) }}", color = Muted, fontSize = 12.sp)
                 OutlinedTextField(
                     value = manuscript,
                     onValueChange = { manuscript = it },

@@ -236,7 +236,7 @@ private fun EpubMakerScreen(
                     val heading = newChapterTitle.trim()
                     if (heading.isNotEmpty()) {
                         manuscript = manuscript.trimEnd().let { existing ->
-                            if (existing.isEmpty()) "# $heading\\n\\n" else "$existing\\n\\n# $heading\\n\\n"
+                            if (existing.isEmpty()) "# $heading\n\n" else "$existing\n\n# $heading\n\n"
                         }
                         newChapterTitle = ""
                         showChapterDialog = false
@@ -642,7 +642,7 @@ $manifest<item id="css" href="styles/book.css" media-type="text/css"/></manifest
             add(zip, "OEBPS/content.opf", opf)
             add(zip, "OEBPS/nav.xhtml", nav)
             chapters.forEachIndexed { index, chapter ->
-                val paragraphs = chapter.body.split(Regex("\\r?\\n\\s*\\r?\\n"))
+                val paragraphs = chapter.body.split(Regex("\\r?\n\\s*\\r?\n"))
                     .map { it.trim() }.filter { it.isNotEmpty() }
                     .joinToString("\n") { "<p>" + xml(it).replace("\n", "<br/>") + "</p>" }
                 val xhtml = """<?xml version="1.0" encoding="UTF-8"?>

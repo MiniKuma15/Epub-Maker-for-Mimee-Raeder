@@ -222,7 +222,7 @@ class BookImportProcessor(private val context: Context) {
     }
 
     private fun saveBitmap(bitmap: Bitmap, prefix: String): File {
-        val directory = File(context.cacheDir, "epub-import-images").apply { mkdirs() }
+        val directory = File(context.filesDir, "epub-import-images").apply { mkdirs() }
         val file = File(directory, "${prefix}-${UUID.randomUUID()}.jpg")
         FileOutputStream(file).use { output ->
             check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "บันทึกภาพหน้าหนังสือไม่สำเร็จ" }

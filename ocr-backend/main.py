@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 from enum import Enum
@@ -142,6 +143,13 @@ def _extract_paddle_text(result: Any) -> str:
             payload = item.json
             if callable(payload):
                 payload = payload()
+        if isinstance(payload, str):
+            try:
+                decoded = json.loads(payload)
+                if isinstance(decoded, (dict, list)):
+                    payload = decoded
+            except (TypeError, json.JSONDecodeError):
+                pass
         if isinstance(payload, dict) and "res" in payload:
             payload = payload["res"]
         if isinstance(payload, dict):

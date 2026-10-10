@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,6 +44,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -178,6 +180,9 @@ private fun EpubMakerScreen(
     var ocrStatus by remember { mutableStateOf("เลือก PDF เพื่อเริ่มอ่านข้อความ") }
     var ocrProgress by remember { mutableStateOf(0f) }
     var manuscriptBeforeOcr by remember { mutableStateOf("") }
+    var showChapterDialog by remember { mutableStateOf(false) }
+    var showClearDialog by remember { mutableStateOf(false) }
+    var newChapterTitle by remember { mutableStateOf("") }
 
     val chapterCount = manuscript.lines().count { it.trim().startsWith("# ") }
 
@@ -211,6 +216,51 @@ private fun EpubMakerScreen(
                 }
             )
         }
+    }
+
+    if (showChapterDialog) {
+        AlertDialog(
+            onDismissRequest = { showChapterDialog = false },
+            title = { Text("เพิ่มหัวข้อบท") },
+            text = {
+                OutlinedTextField(
+                    value = newChapterTitle,
+                    onValueChange = { newChapterTitle = it },
+                    label = { Text("ชื่อบท") },
+                    placeholder = { Text("เช่น บทที่ 1 จุดเริ่มต้น") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val heading = newChapterTitle.trim()
+                    if (heading.isNotEmpty()) {
+                        manuscript = manuscript.trimEnd().let { existing ->
+                            if (existing.isEmpty()) "# $heading\\n\\n" else "$existing\\n\\n# $heading\\n\\n"
+                        }
+                        newChapterTitle = ""
+                        showChapterDialog = false
+                    }
+                }) { Text("เพิ่มบท") }
+            },
+            dismissButton = { TextButton(onClick = { showChapterDialog = false }) { Text("ยกเลิก") } }
+        )
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("ล้างต้นฉบับหรือไม่") },
+            text = { Text("ข้อความทั้งหมดในช่องต้นฉบับจะถูกลบ การกระทำนี้ย้อนกลับไม่ได้") },
+            confirmButton = {
+                TextButton(onClick = {
+                    manuscript = ""
+                    showClearDialog = false
+                    ocrStatus = "ล้างต้นฉบับแล้ว"
+                }) { Text("ล้างข้อความ") }
+            },
+            dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("ยกเลิก") } }
+        )
     }
 
     val pdfLauncher = rememberLauncherForActivityResult(
@@ -442,6 +492,17 @@ private fun EpubMakerScreen(
                         enabled = manuscript.isNotBlank(),
                         modifier = Modifier.weight(1f)
                     ) { Text("คัดลอกข้อความ") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { newChapterTitle = ""; showChapterDialog = true },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("เพิ่มหัวข้อบท") }
+                    OutlinedButton(
+                        onClick = { showClearDialog = true },
+                        enabled = manuscript.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("ล้างต้นฉบับ") }
                 }
                 OutlinedTextField(
                     value = manuscript,

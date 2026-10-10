@@ -314,7 +314,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                         Text("  เริ่มแปลง (Start Conversion)", fontWeight = FontWeight.SemiBold)
                     }
                 }
-                if (state.isProcessing) LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
+                if (state.isProcessing) LinearProgressIndicator(progress = state.progress, modifier = Modifier.fillMaxWidth())
                 Text(state.status, color = Muted, fontSize = 13.sp)
             }
 

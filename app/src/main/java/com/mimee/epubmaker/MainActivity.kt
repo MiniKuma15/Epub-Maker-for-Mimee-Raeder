@@ -259,7 +259,7 @@ private object EpubWriter {
             .split(Regex("\\r?\\n\\s*\\r?\\n"))
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-            .joinToString("\n") { "<p>${xml(it).replace("\\n", "<br/>")}</p>" }
+            .joinToString("\n") { "<p>${xml(it).replace("\n", "<br/>")}</p>" }
 
         val bookId = "urn:uuid:${UUID.randomUUID()}"
         val chapter = """<?xml version="1.0" encoding="UTF-8"?>
@@ -269,7 +269,7 @@ private object EpubWriter {
 </html>"""
 
         val opf = """<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="th">
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="th" prefix="dcterms: http://purl.org/dc/terms/">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="book-id">$bookId</dc:identifier>
 <dc:title>$safeTitle</dc:title><dc:creator>$safeAuthor</dc:creator>

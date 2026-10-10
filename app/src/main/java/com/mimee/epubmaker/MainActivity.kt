@@ -154,6 +154,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     }
     val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             val type = context.contentResolver.getType(uri) ?: "image/jpeg"
             vm.setCoverImage(uri, type, queryDisplayName(context.contentResolver, uri))
         }

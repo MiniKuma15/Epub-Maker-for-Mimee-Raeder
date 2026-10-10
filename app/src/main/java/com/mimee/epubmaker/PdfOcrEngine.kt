@@ -53,7 +53,7 @@ internal object PdfOcrEngine {
                             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                             try {
                                 api.setImage(bitmap)
-                                val recognized = api.utF8Text ?: ""
+                                val recognized = api.getUTF8Text() ?: ""
                                 if (recognized.isNotBlank()) {
                                     if (output.isNotEmpty()) output.append("\n\n")
                                     output.append("— หน้า \${index + 1} —\n")

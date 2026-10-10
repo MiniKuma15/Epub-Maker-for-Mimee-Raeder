@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = Sky) {
                     EpubMakerScreen(
                         context = this@MainActivity,
-                        onOcrPdf = { uri, engine, serverUrl, progress, completed, failed ->
+                        onOcrPdf = { uri, engine, serverUrl, serverToken, progress, completed, failed ->
                             lifecycleScope.launch {
                                 try {
                                     val text = withContext(Dispatchers.IO) {
@@ -102,6 +102,7 @@ class MainActivity : ComponentActivity() {
                                             uri = uri,
                                             engine = engine,
                                             serverUrl = serverUrl,
+                                            serverToken = serverToken,
                                             onProgress = { current, total ->
                                                 runOnUiThread { progress(current, total) }
                                             }
@@ -142,13 +143,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun EpubMakerScreen(
     context: Context,
-    onOcrPdf: (Uri, String, String, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
+    onOcrPdf: (Uri, String, String, String, (Int, Int) -> Unit, (String) -> Unit, (String) -> Unit) -> Unit,
     onExport: (String, String, String, Uri) -> Unit
 ) {
     val draftPrefs = remember(context) { context.getSharedPreferences("epub_maker_draft", Context.MODE_PRIVATE) }
     var title by remember { mutableStateOf(draftPrefs.getString("title", "") ?: "") }
     var ocrEngine by remember { mutableStateOf(draftPrefs.getString("ocrEngine", "tesseract") ?: "tesseract") }
     var ocrServerUrl by remember { mutableStateOf(draftPrefs.getString("ocrServerUrl", "https://your-ocr-server.example.com") ?: "https://your-ocr-server.example.com") }
+    var ocrServerToken by remember { mutableStateOf(draftPrefs.getString("ocrServerToken", "") ?: "") }
     var author by remember { mutableStateOf(draftPrefs.getString("author", "") ?: "") }
     var manuscript by remember { mutableStateOf(draftPrefs.getString("manuscript", "") ?: "") }
     var showHelp by remember { mutableStateOf(true) }
@@ -158,7 +160,7 @@ private fun EpubMakerScreen(
 
     val chapterCount = manuscript.lines().count { it.trim().startsWith("# ") }
 
-    LaunchedEffect(title, author, manuscript, ocrEngine, ocrServerUrl) {
+    LaunchedEffect(title, author, manuscript, ocrEngine, ocrServerUrl, ocrServerToken) {
         delay(400)
         draftPrefs.edit()
             .putString("title", title)
@@ -166,6 +168,7 @@ private fun EpubMakerScreen(
             .putString("manuscript", manuscript)
             .putString("ocrEngine", ocrEngine)
             .putString("ocrServerUrl", ocrServerUrl)
+            .putString("ocrServerToken", ocrServerToken)
             .apply()
     }
 
@@ -180,6 +183,7 @@ private fun EpubMakerScreen(
                 uri,
                 ocrEngine,
                 ocrServerUrl,
+                ocrServerToken,
                 { current, total ->
                     ocrProgress = if (total > 0) current.toFloat() / total else 0f
                     ocrStatus = "กำลังอ่านข้อความ หน้า $current จาก $total"
@@ -276,8 +280,17 @@ private fun EpubMakerScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp)
                     )
+                    OutlinedTextField(
+                        value = ocrServerToken,
+                        onValueChange = { ocrServerToken = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Server access token (ถ้ามี)") },
+                        placeholder = { Text("กรอก token หากเซิร์ฟเวอร์เปิดการยืนยันตัวตน") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp)
+                    )
                     Text(
-                        "โมเดลออนไลน์ต้องติดตั้งและเปิด Backend ก่อน ใช้ HTTPS ในระบบจริง",
+                        "โมเดลออนไลน์ต้องติดตั้ง Backend ก่อน ใช้ HTTPS และ token เมื่อเปิดให้เข้าถึงจากอินเทอร์เน็ต",
                         color = Muted,
                         fontSize = 12.sp
                     )

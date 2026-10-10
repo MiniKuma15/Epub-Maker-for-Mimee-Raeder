@@ -85,7 +85,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mimee.epubmaker.domain.model.ParagraphStyle
@@ -383,6 +385,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                             color = Ink,
                             fontSize = 16.sp,
                             lineHeight = 26.sp,
+                            textIndent = TextIndent(firstLine = indent.em),
                             textAlign = when (alignment) {
                                 TextAlignment.START -> TextAlign.Start
                                 TextAlignment.CENTER -> TextAlign.Center

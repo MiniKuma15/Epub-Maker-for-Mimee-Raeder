@@ -27,7 +27,8 @@ internal object PdfOcrEngine {
         engine: String,
         serverUrl: String,
         serverToken: String,
-        onProgress: (Int, Int) -> Unit
+        onProgress: (Int, Int) -> Unit,
+        onPartialResult: (String) -> Unit
     ): String {
         if (engine !in setOf("tesseract", "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai")) {
             error("ไม่รู้จัก OCR Engine: $engine")
@@ -72,6 +73,8 @@ internal object PdfOcrEngine {
                                     output.append("— หน้า ${index + 1} —\n")
                                     output.append(recognized.trim())
                                 }
+                                // Publish accumulated text after every page so long OCR jobs visibly produce results.
+                                onPartialResult(output.toString())
                             } finally {
                                 bitmap.recycle()
                             }

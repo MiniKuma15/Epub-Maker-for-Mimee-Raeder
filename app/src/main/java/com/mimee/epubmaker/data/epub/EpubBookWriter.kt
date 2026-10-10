@@ -54,7 +54,7 @@ class EpubBookWriter(private val context: Context) {
         val language = xml(book.metadata.language.ifBlank { "th" })
         val title = xml(book.metadata.title.ifBlank { "Untitled" })
         val identifier = xml(book.metadata.identifier)
-        val modified = Instant.now().toString().substringBefore('.').plus("Z")
+        val modified = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(java.time.ZoneOffset.UTC).format(Instant.now())
         val manifest = StringBuilder()
         val spine = StringBuilder()
         val navItems = StringBuilder()
@@ -81,7 +81,7 @@ class EpubBookWriter(private val context: Context) {
 
         val opf = buildString {
             append("""<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="$language">
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="$language" prefix="dcterms: http://purl.org/dc/terms/">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="book-id">$identifier</dc:identifier>
 <dc:title>$title</dc:title>

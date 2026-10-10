@@ -154,6 +154,7 @@ private fun EpubMakerScreen(
     var author by remember { mutableStateOf(draftPrefs.getString("author", "") ?: "") }
     var manuscript by remember { mutableStateOf(draftPrefs.getString("manuscript", "") ?: "") }
     var showHelp by remember { mutableStateOf(true) }
+    var showPreview by remember { mutableStateOf(false) }
     var ocrRunning by remember { mutableStateOf(false) }
     var ocrStatus by remember { mutableStateOf("เลือก PDF เพื่อเริ่มอ่านข้อความ") }
     var ocrProgress by remember { mutableStateOf(0f) }
@@ -371,6 +372,29 @@ private fun EpubMakerScreen(
                     placeholder = { Text("ข้อความจาก PDF จะปรากฏที่นี่…") },
                     shape = RoundedCornerShape(14.dp)
                 )
+                OutlinedButton(
+                    onClick = { showPreview = !showPreview },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (showPreview) "ซ่อนตัวอย่างรูปเล่ม" else "ดูตัวอย่างรูปเล่มก่อนส่งออก")
+                }
+                if (showPreview) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFEFA)),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Line)
+                    ) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(title.ifBlank { "Untitled" }, fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            if (author.isNotBlank()) Text(author, color = Muted, fontSize = 13.sp)
+                            Text(
+                                manuscript.lines().joinToString("\\n") { it.removePrefix("# ") },
+                                color = Ink,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                }
             }
         }
 

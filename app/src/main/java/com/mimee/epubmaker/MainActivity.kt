@@ -224,7 +224,7 @@ private fun EpubMakerScreen(
                 }
                 if (ocrRunning) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CircularProgressIndicator(progress = { ocrProgress }, modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                        CircularProgressIndicator(progress = ocrProgress, modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
                         Text(ocrStatus, color = Blue, fontSize = 13.sp)
                     }
                 } else {

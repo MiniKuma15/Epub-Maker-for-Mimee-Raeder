@@ -3,24 +3,26 @@
 Last updated: 2026-10-10
 
 ## Milestone 1 — Editable text to EPUB3
-
 Status: implemented in source; build and device testing not yet verified.
 
-- [x] Add Android Gradle project files and Compose dependencies.
-- [x] Add a Thai-language UI for book title, author, and editable manuscript.
-- [x] Implement EPUB3 ZIP output with `mimetype`, `META-INF/container.xml`, OPF metadata, navigation XHTML, chapter XHTML, and CSS.
-- [x] Use Android's CreateDocument flow so the user chooses where to save the EPUB.
-- [ ] Run Gradle build and fix any compilation issues.
-- [ ] Test the generated EPUB in an EPUB reader and validate its package structure.
+- [x] Thai-language Compose UI for title, author, and editable manuscript.
+- [x] EPUB3 ZIP writer and Android document picker export.
+- [ ] Validate generated EPUB in an EPUB reader.
 
-## Next milestones
+## Milestone 2 — PDF import and Thai/English OCR
+Status: implemented in source; build and device testing not yet verified.
 
-1. PDF/image import and page handling.
-2. Thai + English OCR integration, including a reliable offline model/data distribution strategy.
-3. Review and edit OCR output while preserving page order.
-4. Cover selection/customization and EPUB image handling.
-5. End-to-end testing and release APK workflow.
+- [x] Select PDF using Android's document picker.
+- [x] Render PDF pages in order using Android PdfRenderer.
+- [x] Integrate Tesseract OCR with Thai + English language selection.
+- [x] Download language data on first use into app-private storage; subsequent recognition runs locally.
+- [x] Append page markers and OCR text to the editable manuscript.
+- [x] Show page progress and basic error messages.
+- [ ] Run CI build and fix any dependency/API issues.
+- [ ] Test on-device with text PDFs and scanned PDFs in Thai and English.
+- [ ] Check memory use and recognition quality on large documents.
 
-## Accuracy notes
-
-The app does **not** perform OCR yet. EPUB export currently converts text entered into the editor into one XHTML chapter. No APK build or EPUB reader validation has been claimed.
+## Known limitations
+- The first OCR run requires internet to download tha.traineddata and eng.traineddata; after download, OCR recognition is local.
+- The PDF is OCR'd as page images. Text layout, illustrations, and original page design are not preserved in the EPUB yet.
+- This source update has not yet been confirmed by a successful Android build or device test.

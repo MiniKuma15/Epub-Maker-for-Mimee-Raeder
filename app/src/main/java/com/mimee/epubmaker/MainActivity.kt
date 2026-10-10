@@ -158,7 +158,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             val type = context.contentResolver.getType(uri) ?: "image/jpeg"
-            vm.setCoverImage(uri, type, queryDisplayName(context.contentResolver, uri))
+            vm.setCoverImage(uri, type, queryDisplayName(context, uri))
         }
     }
     val saveEpub = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/epub+zip")) { uri ->

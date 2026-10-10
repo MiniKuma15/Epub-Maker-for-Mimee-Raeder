@@ -114,13 +114,13 @@ internal object PdfOcrEngine {
         }
         try {
             val imageBytes = ByteArrayOutputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)
                 out.toByteArray()
             }
             connection.outputStream.use { output ->
                 output.write("--$boundary\r\n".toByteArray())
-                output.write("Content-Disposition: form-data; name=\"file\"; filename=\"page.png\"\r\n".toByteArray())
-                output.write("Content-Type: image/png\r\n\r\n".toByteArray())
+                output.write("Content-Disposition: form-data; name=\"file\"; filename=\"page.jpg\"\r\n".toByteArray())
+                output.write("Content-Type: image/jpeg\r\n\r\n".toByteArray())
                 output.write(imageBytes)
                 output.write("\r\n--$boundary--\r\n".toByteArray())
             }

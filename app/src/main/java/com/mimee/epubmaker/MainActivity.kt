@@ -382,7 +382,7 @@ private fun EpubMakerScreen(
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
                     androidx.compose.material3.Icon(Icons.Default.CheckCircle, null, tint = Blue)
                     Column(Modifier.padding(start = 10.dp)) {
-                        Text("OCR ทำงานบนเครื่อง", fontWeight = FontWeight.SemiBold, color = Ink)
+                        Text(if (ocrEngine == "tesseract") "OCR ทำงานบนเครื่อง" else "การส่งข้อมูล OCR", fontWeight = FontWeight.SemiBold, color = Ink)
                         Spacer(Modifier.height(4.dp))
                         Text(
                             if (ocrEngine == "tesseract") "Tesseract ทำงานบนเครื่อง ไม่ส่งหน้า PDF ไปยังเซิร์ฟเวอร์ OCR ภายนอก" else "โหมดออนไลน์ส่งภาพหน้าหนังสือไปยัง OCR Server ที่ตั้งค่าไว้ โดย Google engines จะส่งต่อภาพไปยัง Google API",

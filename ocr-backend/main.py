@@ -22,11 +22,16 @@ app = FastAPI(
 
 class Engine(str, Enum):
     paddleocr = "paddleocr"
+    paddleocr_v4 = "paddleocr-v4"
+    paddleocr_v5 = "paddleocr-v5"
     easyocr = "easyocr"
     paddleocr_vl = "paddleocr-vl"
     google_vision = "google-vision"
     gemini = "gemini"
     google_document_ai = "google-document-ai"
+    qwen2_5_vl = "qwen2.5-vl"
+    gpt_4o = "gpt-4o"
+    claude_vision = "claude-vision"
 
 
 class OcrResponse(BaseModel):
@@ -43,12 +48,16 @@ def health() -> dict[str, str]:
 def engines() -> dict[str, Any]:
     return {
         "engines": [
-            {"id": "paddleocr", "name": "PaddleOCR PP-OCR", "type": "self-hosted", "languages": ["th", "en"]},
+            {"id": "paddleocr-v4", "name": "PaddleOCR PP-OCRv4", "type": "self-hosted", "languages": ["th", "en"]},
+            {"id": "paddleocr-v5", "name": "PaddleOCR PP-OCRv5", "type": "self-hosted", "languages": ["th", "en"]},
             {"id": "easyocr", "name": "EasyOCR", "type": "self-hosted", "languages": ["th", "en"]},
             {"id": "paddleocr-vl", "name": "PaddleOCR-VL", "type": "self-hosted", "languages": ["multilingual"]},
             {"id": "google-vision", "name": "Google Cloud Vision OCR", "type": "online", "languages": ["th", "en"]},
             {"id": "gemini", "name": "Google Gemini Vision", "type": "online", "languages": ["multilingual"]},
             {"id": "google-document-ai", "name": "Google Document AI OCR", "type": "online", "languages": ["th", "en"]},
+            {"id": "qwen2.5-vl", "name": "Qwen2.5-VL Vision", "type": "online", "languages": ["multilingual"]},
+            {"id": "gpt-4o", "name": "GPT-4o Vision", "type": "online", "languages": ["multilingual"]},
+            {"id": "claude-vision", "name": "Claude Vision", "type": "online", "languages": ["multilingual"]},
         ]
     }
 
@@ -98,9 +107,12 @@ def _run_engine(engine: Engine, path: str, image_bytes: bytes) -> str:
         import easyocr
         return "\n".join(str(line) for line in _easy_reader().readtext(path, detail=0, paragraph=True))
 
-    if engine == Engine.paddleocr:
-        from paddleocr import PaddleOCR
-        return _extract_paddle_text(_paddle_reader().predict(path))
+    if engine in (Engine.paddleocr, Engine.paddleocr_v4, Engine.paddleocr_v5):
+        version = "PP-OCRv4" if engine == Engine.paddleocr_v4 else "PP-OCRv5"
+        reader = _paddle_reader(version)
+        if hasattr(reader, "predict"):
+            return _extract_paddle_text(reader.predict(path))
+        return _extract_paddle_text(reader.ocr(path, cls=True))
 
     if engine == Engine.paddleocr_vl:
         from paddleocr import PaddleOCRVL
@@ -115,11 +127,24 @@ def _run_engine(engine: Engine, path: str, image_bytes: bytes) -> str:
     if engine == Engine.google_document_ai:
         return _google_document_ai(image_bytes, Path(path).suffix.lower())
 
+    if engine == Engine.qwen2_5_vl:
+        return _openai_compatible_vision("QWEN_API_KEY", "QWEN_VL_MODEL", "qwen2.5-vl-72b-instruct",
+            os.getenv("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1").strip(),
+            image_bytes, Path(path).suffix.lower())
+
+    if engine == Engine.gpt_4o:
+        return _openai_compatible_vision("OPENAI_API_KEY", "OPENAI_VISION_MODEL", "gpt-4o",
+            os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip(),
+            image_bytes, Path(path).suffix.lower())
+
+    if engine == Engine.claude_vision:
+        return _claude_vision(image_bytes, Path(path).suffix.lower())
+
     raise ValueError(f"Unsupported engine: {engine}")
 
 
 _easy_reader_instance = None
-_paddle_reader_instance = None
+_paddle_reader_instances: dict[str, Any] = {}
 _paddle_vl_reader_instance = None
 
 
@@ -131,12 +156,11 @@ def _easy_reader():
     return _easy_reader_instance
 
 
-def _paddle_reader():
-    global _paddle_reader_instance
-    if _paddle_reader_instance is None:
+def _paddle_reader(version: str = "PP-OCRv5"):
+    if version not in _paddle_reader_instances:
         from paddleocr import PaddleOCR
-        _paddle_reader_instance = PaddleOCR(lang="th")
-    return _paddle_reader_instance
+        _paddle_reader_instances[version] = PaddleOCR(lang="th", ocr_version=version)
+    return _paddle_reader_instances[version]
 
 
 def _paddle_vl_reader():
@@ -226,6 +250,63 @@ def _google_document_ai(image_bytes: bytes, suffix: str) -> str:
     )
     response = _google_post_json(endpoint, body, headers={"Authorization": f"Bearer {credentials.token}"})
     return (response.get("document") or {}).get("text", "")
+
+
+def _openai_compatible_vision(api_key_env: str, model_env: str, default_model: str,
+                             base_url: str, image_bytes: bytes, suffix: str) -> str:
+    api_key = os.getenv(api_key_env, "").strip()
+    if not api_key:
+        raise RuntimeError(f"Set {api_key_env} on the OCR server")
+    data_url = f"data:{_mime_type(suffix)};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+    body = {
+        "model": os.getenv(model_env, default_model).strip(),
+        "temperature": 0,
+        "max_tokens": 8192,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": (
+                "Transcribe all visible text in this scanned book page exactly as printed. "
+                "It may contain Thai and English. Preserve reading order, paragraphs and punctuation. "
+                "Do not summarize, translate, rewrite, correct spelling, or add commentary. Return only the text."
+            )},
+            {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
+        ]}],
+    }
+    response = _google_post_json(base_url.rstrip("/") + "/chat/completions", body,
+                                 headers={"Authorization": f"Bearer {api_key}"})
+    choices = response.get("choices") or []
+    if not choices:
+        raise RuntimeError("Vision model returned no OCR result")
+    content = (choices[0].get("message") or {}).get("content", "")
+    if isinstance(content, list):
+        return "\\n".join(str(part.get("text", "")) for part in content
+                           if isinstance(part, dict) and part.get("text"))
+    return str(content)
+
+
+def _claude_vision(image_bytes: bytes, suffix: str) -> str:
+    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("Set ANTHROPIC_API_KEY on the OCR server")
+    body = {
+        "model": os.getenv("CLAUDE_VISION_MODEL", "claude-3-5-sonnet-latest").strip(),
+        "max_tokens": 8192,
+        "temperature": 0,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": (
+                "Transcribe all visible text in this scanned book page exactly as printed. "
+                "It may contain Thai and English. Preserve reading order, paragraphs and punctuation. "
+                "Do not summarize, translate, rewrite, correct spelling, or add commentary. Return only the text."
+            )},
+            {"type": "image", "source": {"type": "base64", "media_type": _mime_type(suffix),
+                                         "data": base64.b64encode(image_bytes).decode("ascii")}},
+        ]}],
+    }
+    response = _google_post_json("https://api.anthropic.com/v1/messages", body, headers={
+        "x-api-key": api_key,
+        "anthropic-version": os.getenv("ANTHROPIC_API_VERSION", "2023-06-01"),
+    })
+    return "\\n".join(str(part.get("text", "")) for part in response.get("content", [])
+                       if isinstance(part, dict) and part.get("type") == "text" and part.get("text"))
 
 
 def _google_post_json(url: str, body: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:

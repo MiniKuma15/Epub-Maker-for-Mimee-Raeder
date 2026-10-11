@@ -384,8 +384,9 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
             }
 
             SectionCard("4. แก้ไขข้อความและพรีวิว", Icons.Default.TextFields) {
-                val pages = state.book.orderedChapters()
-                val sourcePageIndex = sourcePageIndexForChapter(pages.getOrNull(selectedPageIndex), selectedPageIndex, state.sourcePageCount)
+                // Navigation and editing are indexed by original PDF pages, not EPUB chapters.
+                val pages = state.sourcePages.sortedBy { it.order }
+                val sourcePageIndex = pages.getOrNull(selectedPageIndex)?.order ?: selectedPageIndex
                 if (state.hasConverted && state.sourcePageCount > 0) {
                     Text("ตั้งค่าหน้าปัจจุบัน", fontWeight = FontWeight.SemiBold, color = Ink)
                     Text("เลือกหน้าจากปุ่มก่อนหน้า/ถัดไป แล้วตั้งค่าหน้านี้ได้เลย ไม่ต้องเลื่อนดูรายการทุกหน้า", color = Muted, fontSize = 12.sp)
@@ -403,6 +404,10 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                         }
                     }
                     if (state.selectedMimeType == "application/pdf" || state.selectedFileName.endsWith(".pdf", true)) {
+                        OutlinedButton(
+                            onClick = { vm.setPdfPageAsCover(sourcePageIndex) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("ใช้หน้า PDF ที่กำลังดูเป็นปก (หน้า ${sourcePageIndex + 1})") }
                         Divider(color = Line)
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             androidx.compose.material3.Checkbox(
@@ -432,8 +437,14 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                                 vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
                                 val next = (selectedPageIndex - 1).coerceAtLeast(0)
                                 selectedPageIndex = next
-                                val pageText = pages[next].orderedContents().filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>().joinToString("\n\n") { it.plainText }
+                                val pageText = pages.getOrNull(next)?.orderedContents()
+                                    ?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
+                                    ?.joinToString("\n\n") { it.plainText }.orEmpty()
                                 editorValue = TextFieldValue(AnnotatedString(pageText), selection = androidx.compose.ui.text.TextRange(pageText.length))
+                                val pageBlock = pages.getOrNull(next)?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()
+                                alignment = pageBlock?.paragraphStyle?.alignment ?: TextAlignment.START
+                                indent = pageBlock?.paragraphStyle?.firstLineIndentEm ?: 1f
+                                spacing = pageBlock?.paragraphStyle?.spacingAfterEm ?: 0.8f
                             },
                             enabled = state.hasConverted && selectedPageIndex > 0,
                             modifier = Modifier.weight(1f)

@@ -281,14 +281,18 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                 }
                 DropdownMenu(expanded = showEngineMenu, onDismissRequest = { showEngineMenu = false }) {
                     listOf(
-                        "tesseract" to "Tesseract — Offline ไทย + อังกฤษ",
+                        "tesseract" to "Tesseract — Offline ไทย + อังกฤษ (สำรอง)",
                         "mlkit-latin" to "Google ML Kit — Offline อังกฤษ/Latin",
-                        "paddleocr" to "PaddleOCR — Server",
-                        "easyocr" to "EasyOCR — Server",
-                        "paddleocr-vl" to "PaddleOCR-VL — Server",
+                        "paddleocr-v4" to "PaddleOCR PP-OCRv4 — Server / Offline บนเครื่องเซิร์ฟเวอร์",
+                        "paddleocr-v5" to "PaddleOCR PP-OCRv5 — Server / Offline บนเครื่องเซิร์ฟเวอร์",
+                        "paddleocr-vl" to "PaddleOCR-VL — Server วิเคราะห์เอกสาร",
+                        "easyocr" to "EasyOCR — Server ไทย + อังกฤษ",
                         "google-vision" to "Google Cloud Vision — Online API",
+                        "google-document-ai" to "Google Document AI — Online API",
                         "gemini" to "Gemini Vision — Online API",
-                        "google-document-ai" to "Google Document AI — Online API"
+                        "qwen2.5-vl" to "Qwen2.5-VL — Online API",
+                        "gpt-4o" to "GPT-4o Vision — Online API",
+                        "claude-vision" to "Claude Vision — Online API"
                     ).forEach { (id, label) ->
                         DropdownMenuItem(text = { Text(label) }, onClick = { vm.setOcrEngine(id); showEngineMenu = false })
                     }
@@ -633,14 +637,18 @@ private fun richRuns(value: AnnotatedString): List<RichTextRun> {
 }
 
 private fun engineLabel(engine: String): String = when (engine) {
-    "tesseract" -> "Tesseract — Offline ไทย + อังกฤษ"
+    "tesseract" -> "Tesseract — Offline ไทย + อังกฤษ (สำรอง)"
     "mlkit-latin" -> "Google ML Kit — Offline อังกฤษ/Latin"
-    "paddleocr" -> "PaddleOCR — Server"
-    "easyocr" -> "EasyOCR — Server"
-    "paddleocr-vl" -> "PaddleOCR-VL — Server"
+    "paddleocr", "paddleocr-v5" -> "PaddleOCR PP-OCRv5 — Server"
+    "paddleocr-v4" -> "PaddleOCR PP-OCRv4 — Server"
+    "easyocr" -> "EasyOCR — Server ไทย + อังกฤษ"
+    "paddleocr-vl" -> "PaddleOCR-VL — Server วิเคราะห์เอกสาร"
     "google-vision" -> "Google Cloud Vision — Online API"
     "gemini" -> "Gemini Vision — Online API"
     "google-document-ai" -> "Google Document AI — Online API"
+    "qwen2.5-vl" -> "Qwen2.5-VL — Online API"
+    "gpt-4o" -> "GPT-4o Vision — Online API"
+    "claude-vision" -> "Claude Vision — Online API"
     else -> engine
 }
 

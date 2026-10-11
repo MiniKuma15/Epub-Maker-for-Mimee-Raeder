@@ -52,6 +52,7 @@ data class EpubMakerUiState(
     val error: String? = null,
     val hasConverted: Boolean = false,
     val sourcePageCount: Int = 0,
+    val sourcePages: List<Chapter> = emptyList(),
     val pagesAsImages: Set<Int> = emptySet(),
     val isExporting: Boolean = false
 )
@@ -159,6 +160,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                 _state.update { current ->
                     current.copy(
                         sourcePageCount = sourcePageChapters.maxOfOrNull { it.order + 1 } ?: 1,
+                        sourcePages = sourcePageChapters,
                         book = book.copy(
                             coverImage = current.book.coverImage ?: book.coverImage,
                             metadata = book.metadata.copy(
@@ -309,6 +311,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
             if (sourcePageChapters.isEmpty()) return@update current
             val chapters = buildChaptersFromSource(starts, current.sourcePageCount)
             current.copy(
+                sourcePages = sourcePageChapters,
                 book = current.book.copy(chapters = chapters, modifiedAt = Instant.now()),
                 status = "กำหนดบทจากหน้า PDF แล้ว: ${chapters.size} บท"
             )
@@ -358,6 +361,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
             _state.update { state ->
                 state.copy(
                     pagesAsImages = state.pagesAsImages - pageIndex,
+                    sourcePages = sourcePageChapters,
                     book = state.book.copy(chapters = buildChaptersFromSource(selectedChapterStarts, state.sourcePageCount), modifiedAt = Instant.now()),
                     status = "หน้า ${pageIndex + 1} จะใช้ข้อความที่แปลงไว้"
                 )
@@ -411,6 +415,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                 _state.update { state ->
                     state.copy(
                         pagesAsImages = state.pagesAsImages + pageIndex,
+                        sourcePages = sourcePageChapters,
                         book = state.book.copy(chapters = buildChaptersFromSource(selectedChapterStarts, state.sourcePageCount), modifiedAt = Instant.now()),
                         status = "ตั้งหน้า ${pageIndex + 1} เป็นรูปภาพแล้ว"
                     )
@@ -421,35 +426,37 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun updatePageManuscript(chapterIndex: Int, text: String, runs: List<RichTextRun>, paragraphStyle: ParagraphStyle) {
-        _state.update { current ->
-            val chapters = current.book.orderedChapters().toMutableList()
-            if (chapterIndex !in chapters.indices) return@update current
-            val chapter = chapters[chapterIndex]
-            // A page deliberately converted to an image must not regain its OCR text during navigation/export.
-            if (chapter.orderedContents().isNotEmpty() && chapter.orderedContents().all { it is ImageBlock }) return@update current
-            val normalizedRuns = if (runs.isEmpty() && text.isNotEmpty()) listOf(RichTextRun(text)) else runs
-            val paragraphs = splitRichRunsIntoParagraphs(text, normalizedRuns)
-            val replacements = paragraphs.mapIndexed { index, paragraph ->
-                TextBlock(order = index, runs = paragraph, paragraphStyle = paragraphStyle)
-            }
-            val output = mutableListOf<com.mimee.epubmaker.domain.model.BookContent>()
-            var replacementIndex = 0
-            chapter.orderedContents().forEach { item ->
-                if (item is TextBlock) {
-                    if (replacementIndex < replacements.size) output += replacements[replacementIndex++].copy(order = output.size)
-                } else output += item
-            }
-            while (replacementIndex < replacements.size) output += replacements[replacementIndex++].copy(order = output.size)
-            chapters[chapterIndex] = chapter.copy(contents = output)
-            if (chapterIndex in sourcePageChapters.indices &&
-                sourcePageChapters[chapterIndex].title.startsWith("หน้า ")
-            ) {
-                sourcePageChapters = sourcePageChapters.toMutableList().also { sourcePages ->
-                    sourcePages[chapterIndex] = sourcePages[chapterIndex].copy(contents = output)
-                }
-            }
-            current.copy(book = current.book.copy(chapters = chapters, modifiedAt = Instant.now()))
+    fun updatePageManuscript(pageIndex: Int, text: String, runs: List<RichTextRun>, paragraphStyle: ParagraphStyle) {
+        val current = _state.value
+        if (pageIndex !in sourcePageChapters.indices) return
+        val sourcePage = sourcePageChapters[pageIndex]
+        // Keep the edited manuscript attached to its original PDF page, regardless of TOC chapter grouping.
+        if (pageImageBlocks.containsKey(sourcePage.order)) return
+        val normalizedRuns = if (runs.isEmpty() && text.isNotEmpty()) listOf(RichTextRun(text)) else runs
+        val paragraphs = splitRichRunsIntoParagraphs(text, normalizedRuns)
+        val replacements = paragraphs.mapIndexed { index, paragraph ->
+            TextBlock(order = index, runs = paragraph, paragraphStyle = paragraphStyle)
+        }
+        val output = mutableListOf<com.mimee.epubmaker.domain.model.BookContent>()
+        var replacementIndex = 0
+        sourcePage.orderedContents().forEach { item ->
+            if (item is TextBlock) {
+                if (replacementIndex < replacements.size) output += replacements[replacementIndex++].copy(order = output.size)
+            } else output += item
+        }
+        while (replacementIndex < replacements.size) output += replacements[replacementIndex++].copy(order = output.size)
+        sourcePageChapters = sourcePageChapters.toMutableList().also { sourcePages ->
+            sourcePages[pageIndex] = sourcePage.copy(contents = output)
+        }
+        val updatedPages = sourcePageChapters
+        _state.update { latest ->
+            latest.copy(
+                sourcePages = updatedPages,
+                book = latest.book.copy(
+                    chapters = buildChaptersFromSource(selectedChapterStarts, latest.sourcePageCount),
+                    modifiedAt = Instant.now()
+                )
+            )
         }
     }
 

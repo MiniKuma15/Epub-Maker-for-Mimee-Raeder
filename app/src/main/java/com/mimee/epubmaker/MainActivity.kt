@@ -188,13 +188,13 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
             chapterStartPages = emptySet()
             pdfPreviewZoom = 1f
             showPreview = true
-            val chapter = state.book.orderedChapters().firstOrNull()
-            val text = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
-                ?.joinToString("\n\n") { it.plainText }.orEmpty()
+            val firstSourcePage = state.sourcePages.sortedBy { it.order }.firstOrNull()
+            val firstTextBlocks = firstSourcePage?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>().orEmpty()
+            val text = firstTextBlocks.joinToString("\n\n") { it.plainText }
             editorValue = TextFieldValue(AnnotatedString(text), selection = androidx.compose.ui.text.TextRange(text.length))
-            alignment = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()?.paragraphStyle?.alignment ?: TextAlignment.START
-            indent = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()?.paragraphStyle?.firstLineIndentEm ?: 1f
-            spacing = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()?.paragraphStyle?.spacingAfterEm ?: 0.8f
+            alignment = firstTextBlocks.firstOrNull()?.paragraphStyle?.alignment ?: TextAlignment.START
+            indent = firstTextBlocks.firstOrNull()?.paragraphStyle?.firstLineIndentEm ?: 1f
+            spacing = firstTextBlocks.firstOrNull()?.paragraphStyle?.spacingAfterEm ?: 0.8f
         } else {
             selectedPageIndex = 0
             editorValue = TextFieldValue("")

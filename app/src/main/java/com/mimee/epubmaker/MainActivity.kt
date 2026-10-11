@@ -383,7 +383,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
             SectionCard("4. แก้ไขข้อความและพรีวิว", Icons.Default.TextFields) {
                 val pages = state.book.orderedChapters()
                 val sourcePageIndex = chapterStartPages.sorted().getOrElse(selectedPageIndex) { selectedPageIndex }
-                if (state.hasConverted && state.sourcePageCount > 1) {
+                if (state.hasConverted && state.sourcePageCount > 0) {
                     Text("กำหนดหน้าเริ่มบท", fontWeight = FontWeight.SemiBold, color = Ink)
                     Text("ติ๊กหน้าที่ต้องการให้เริ่มบทใหม่ แล้วกดใช้การแบ่งบท ค่าเริ่มต้นคือทุกหน้าแยกเป็นบท", color = Muted, fontSize = 12.sp)
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -399,21 +399,23 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                             }
                         }
                     }
-                    Divider(color = Line)
-                    Text("เลือกหน้าที่ต้องการเก็บเป็นรูปภาพ", fontWeight = FontWeight.SemiBold, color = Ink)
-                    Text("ติ๊กแล้ว EPUB จะใช้ภาพเต็มหน้าจาก PDF แทนข้อความ OCR ของหน้านั้น", color = Muted, fontSize = 12.sp)
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        (0 until state.sourcePageCount).forEach { pageIndex ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                androidx.compose.material3.Checkbox(
-                                    checked = pageIndex in state.pagesAsImages,
-                                    onCheckedChange = { checked -> vm.setPageAsImage(pageIndex, checked) }
-                                )
-                                Text(
-                                    "หน้า ${pageIndex + 1} ${if (pageIndex in state.pagesAsImages) "— ใช้รูปภาพ" else "— ใช้ข้อความ"}",
-                                    color = Ink,
-                                    fontSize = 13.sp
-                                )
+                    if (state.selectedMimeType == "application/pdf" || state.selectedFileName.endsWith(".pdf", true)) {
+                        Divider(color = Line)
+                        Text("เลือกหน้าที่ต้องการเก็บเป็นรูปภาพ", fontWeight = FontWeight.SemiBold, color = Ink)
+                        Text("ติ๊กแล้ว EPUB จะใช้ภาพเต็มหน้าจาก PDF แทนข้อความ OCR ของหน้านั้น", color = Muted, fontSize = 12.sp)
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            (0 until state.sourcePageCount).forEach { pageIndex ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    androidx.compose.material3.Checkbox(
+                                        checked = pageIndex in state.pagesAsImages,
+                                        onCheckedChange = { checked -> vm.setPageAsImage(pageIndex, checked) }
+                                    )
+                                    Text(
+                                        "หน้า ${pageIndex + 1} ${if (pageIndex in state.pagesAsImages) "— ใช้รูปภาพ" else "— ใช้ข้อความ"}",
+                                        color = Ink,
+                                        fontSize = 13.sp
+                                    )
+                                }
                             }
                         }
                     }

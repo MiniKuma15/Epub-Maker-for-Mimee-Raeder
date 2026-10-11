@@ -278,7 +278,7 @@ def _openai_compatible_vision(api_key_env: str, model_env: str, default_model: s
         raise RuntimeError("Vision model returned no OCR result")
     content = (choices[0].get("message") or {}).get("content", "")
     if isinstance(content, list):
-        return "\\n".join(str(part.get("text", "")) for part in content
+        return "\n".join(str(part.get("text", "")) for part in content
                            if isinstance(part, dict) and part.get("text"))
     return str(content)
 
@@ -305,7 +305,7 @@ def _claude_vision(image_bytes: bytes, suffix: str) -> str:
         "x-api-key": api_key,
         "anthropic-version": os.getenv("ANTHROPIC_API_VERSION", "2023-06-01"),
     })
-    return "\\n".join(str(part.get("text", "")) for part in response.get("content", [])
+    return "\n".join(str(part.get("text", "")) for part in response.get("content", [])
                        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"))
 
 

@@ -33,6 +33,7 @@ data class EpubMakerUiState(
     val author: String = "",
     val book: Book = Book(),
     val keepScannedPagesAsImages: Boolean = false,
+    val extractEmbeddedTextOnly: Boolean = false,
     val runOcrForImages: Boolean = true,
     val ocrEngine: String = "tesseract",
     val serverUrl: String = "",
@@ -82,6 +83,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun setKeepScannedPagesAsImages(value: Boolean) = _state.update { it.copy(keepScannedPagesAsImages = value) }
+    fun setExtractEmbeddedTextOnly(value: Boolean) = _state.update { it.copy(extractEmbeddedTextOnly = value) }
     fun setRunOcrForImages(value: Boolean) = _state.update { it.copy(runOcrForImages = value) }
     fun setOcrEngine(value: String) = _state.update { it.copy(ocrEngine = value) }
     fun setServerUrl(value: String) = _state.update { it.copy(serverUrl = value) }
@@ -107,6 +109,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                             title = title,
                             author = author,
                             keepScannedPagesAsImages = _state.value.keepScannedPagesAsImages,
+                            extractEmbeddedTextOnly = _state.value.extractEmbeddedTextOnly,
                             ocrEngine = _state.value.ocrEngine,
                             serverUrl = _state.value.serverUrl,
                             serverToken = _state.value.serverToken,

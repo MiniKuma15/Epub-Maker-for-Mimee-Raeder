@@ -155,7 +155,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 sourcePageChapters = book.orderedChapters().sortedBy { it.order }
                 pageImageBlocks.clear()
-                selectedChapterStarts = sourcePageChapters.map { it.order }.toSet().ifEmpty { setOf(0) }
+                selectedChapterStarts = setOf(0)
                 _state.update { current ->
                     current.copy(
                         sourcePageCount = sourcePageChapters.maxOfOrNull { it.order + 1 } ?: 1,

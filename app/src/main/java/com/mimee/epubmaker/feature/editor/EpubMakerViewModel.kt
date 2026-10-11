@@ -299,7 +299,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
             sourcePages.forEach { page ->
                 val shouldStart = grouped.isEmpty() || starts.any { it > previousPageOrder && it <= page.order }
                 if (shouldStart) {
-                    grouped += mutableListOf()
+                    grouped.add(mutableListOf())
                     groupStartPages += page.order
                 }
                 grouped.last().addAll(page.orderedContents())

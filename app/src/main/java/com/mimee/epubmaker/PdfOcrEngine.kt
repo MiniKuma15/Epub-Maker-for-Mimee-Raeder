@@ -54,9 +54,9 @@ internal object PdfOcrEngine {
             }
         }
         return output.toString()
-            .replace(Regex("[ \\t]+\\n"), "\\n")
-            .replace(Regex("\\n[ \\t]+"), "\\n")
-            .replace(Regex("\\n{3,}"), "\\n\\n")
+            .replace(Regex("[ \\t]+\\n"), "\n")
+            .replace(Regex("\\n[ \\t]+"), "\n")
+            .replace(Regex("\\n{3,}"), "\n\n")
             .trim()
     }
 

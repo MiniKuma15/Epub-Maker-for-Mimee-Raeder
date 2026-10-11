@@ -337,30 +337,48 @@ def _mime_type(suffix: str) -> str:
 
 def _extract_paddle_text(result: Any) -> str:
     lines: list[str] = []
-    for item in result or []:
-        payload = item
-        if hasattr(item, "json"):
-            payload = item.json
+
+    def visit(payload: Any) -> None:
+        if payload is None:
+            return
+        if hasattr(payload, "json"):
+            payload = payload.json
             if callable(payload):
                 payload = payload()
         if isinstance(payload, str):
             try:
                 decoded = json.loads(payload)
                 if isinstance(decoded, (dict, list)):
-                    payload = decoded
+                    visit(decoded)
+                    return
             except (TypeError, json.JSONDecodeError):
                 pass
-        if isinstance(payload, dict) and "res" in payload:
-            payload = payload["res"]
+            if payload.strip():
+                lines.append(payload.strip())
+            return
         if isinstance(payload, dict):
-            for key in ("rec_texts", "texts", "text"):
+            if "res" in payload:
+                visit(payload["res"])
+                return
+            for key in ("rec_texts", "texts"):
                 value = payload.get(key)
                 if isinstance(value, list):
-                    lines.extend(str(part) for part in value if str(part).strip())
-                    break
-                if isinstance(value, str) and value.strip():
-                    lines.append(value)
-                    break
-        elif isinstance(payload, str) and payload.strip():
-            lines.append(payload)
-    return "\n".join(lines)
+                    lines.extend(str(part).strip() for part in value if str(part).strip())
+                    return
+            value = payload.get("text")
+            if isinstance(value, str) and value.strip():
+                lines.append(value.strip())
+                return
+            return
+        if isinstance(payload, (list, tuple)):
+            # PaddleOCR 2.x returns [box, (recognized_text, confidence)] per line.
+            if len(payload) >= 2 and isinstance(payload[1], (list, tuple)) and payload[1]:
+                candidate = payload[1][0]
+                if isinstance(candidate, str) and candidate.strip():
+                    lines.append(candidate.strip())
+                    return
+            for child in payload:
+                visit(child)
+
+    visit(result)
+    return "\\n".join(lines)

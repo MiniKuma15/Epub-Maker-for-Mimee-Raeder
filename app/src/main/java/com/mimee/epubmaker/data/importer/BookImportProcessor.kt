@@ -33,6 +33,7 @@ class BookImportProcessor(private val context: Context) {
         title: String,
         author: String,
         keepScannedPagesAsImages: Boolean,
+        extractEmbeddedTextOnly: Boolean = false,
         ocrEngine: String,
         serverUrl: String,
         serverToken: String,
@@ -68,7 +69,7 @@ class BookImportProcessor(private val context: Context) {
                         renderer.openPage(index).use { page ->
                             val bitmap = renderPage(page)
                             try {
-                                if (keepScannedPagesAsImages) {
+                                if (keepScannedPagesAsImages || extractEmbeddedTextOnly) {
                                     val saved = saveBitmap(bitmap, "pdf-page-${index + 1}")
                                     contents += ImageBlock(
                                         order = contents.size,

@@ -3,6 +3,7 @@ package com.mimee.epubmaker
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfRenderer
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
@@ -83,6 +84,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -148,6 +150,9 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     var indent by remember { mutableFloatStateOf(1f) }
     var spacing by remember { mutableFloatStateOf(0.8f) }
     var showPreview by remember { mutableStateOf(false) }
+    var selectedPageIndex by remember { mutableStateOf(0) }
+    var chapterStartPages by remember { mutableStateOf(emptySet<Int>()) }
+    var pdfPreviewZoom by remember { mutableFloatStateOf(1f) }
     var showEngineMenu by remember { mutableStateOf(false) }
     var altText by remember { mutableStateOf("") }
     var caption by remember { mutableStateOf("") }
@@ -173,18 +178,25 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     val saveEpub = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/epub+zip")) { uri ->
         if (uri != null) {
             val runs = richRuns(editorValue.annotatedString)
-            vm.exportTo(uri, editorValue.text, runs, ParagraphStyle(alignment, indent, spacing))
+            vm.exportTo(uri, editorValue.text, runs, ParagraphStyle(alignment, indent, spacing), selectedPageIndex)
         }
     }
 
     LaunchedEffect(state.hasConverted, state.selectedUri) {
         if (state.hasConverted) {
-            val text = state.book.allTextBlocks().joinToString("\n\n") { it.plainText }
+            selectedPageIndex = 0
+            chapterStartPages = emptySet()
+            pdfPreviewZoom = 1f
+            showPreview = true
+            val firstSourcePage = state.sourcePages.sortedBy { it.order }.firstOrNull()
+            val firstTextBlocks = firstSourcePage?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>().orEmpty()
+            val text = firstTextBlocks.joinToString("\n\n") { it.plainText }
             editorValue = TextFieldValue(AnnotatedString(text), selection = androidx.compose.ui.text.TextRange(text.length))
-            alignment = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.alignment ?: TextAlignment.START
-            indent = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.firstLineIndentEm ?: 1f
-            spacing = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.spacingAfterEm ?: 0.8f
+            alignment = firstTextBlocks.firstOrNull()?.paragraphStyle?.alignment ?: TextAlignment.START
+            indent = firstTextBlocks.firstOrNull()?.paragraphStyle?.firstLineIndentEm ?: 1f
+            spacing = firstTextBlocks.firstOrNull()?.paragraphStyle?.spacingAfterEm ?: 0.8f
         } else {
+            selectedPageIndex = 0
             editorValue = TextFieldValue("")
         }
     }
@@ -261,6 +273,16 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                     Column(Modifier.weight(1f)) {
                         Text("เก็บหน้าสแกนเป็นรูปภาพ", fontWeight = FontWeight.Medium, color = Ink)
                         Text("หน้าที่ไม่มีข้อความจะฝังเป็นภาพใน EPUB และไม่ OCR", color = Muted, fontSize = 12.sp)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(
+                        checked = state.extractEmbeddedTextOnly,
+                        onCheckedChange = vm::setExtractEmbeddedTextOnly
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text("PDF มีข้อความฝังอยู่แล้ว (ไม่ใช้ OCR)", fontWeight = FontWeight.Medium, color = Ink)
+                        Text("ดึงข้อความจาก PDF โดยตรง ส่วนหน้าสแกนจะเก็บเป็นภาพ ไม่ส่งเข้า OCR", color = Muted, fontSize = 12.sp)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -361,7 +383,114 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                 Text("รูปแบบไฟล์ปลายทาง: EPUB 3 เท่านั้น", color = Blue, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
 
-            SectionCard("4. แก้ไขข้อความ (Rich Text Editor)", Icons.Default.TextFields) {
+            SectionCard("4. แก้ไขข้อความและพรีวิว", Icons.Default.TextFields) {
+                // Navigation and editing are indexed by original PDF pages, not EPUB chapters.
+                val pages = state.sourcePages.sortedBy { it.order }
+                val sourcePageIndex = pages.getOrNull(selectedPageIndex)?.order ?: selectedPageIndex
+                if (state.hasConverted && state.sourcePageCount > 0) {
+                    Text("ตั้งค่าหน้าปัจจุบัน", fontWeight = FontWeight.SemiBold, color = Ink)
+                    Text("เลือกหน้าจากปุ่มก่อนหน้า/ถัดไป แล้วตั้งค่าหน้านี้ได้เลย ไม่ต้องเลื่อนดูรายการทุกหน้า", color = Muted, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        androidx.compose.material3.Checkbox(
+                            checked = selectedPageIndex in chapterStartPages,
+                            onCheckedChange = { checked ->
+                                chapterStartPages = if (checked) chapterStartPages + selectedPageIndex else chapterStartPages - selectedPageIndex
+                                vm.setChapterStarts(chapterStartPages)
+                            }
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("หน้านี้เป็นบทใหม่ในสารบัญ (Index)", color = Ink, fontWeight = FontWeight.Medium)
+                            Text(if (selectedPageIndex in chapterStartPages) "เลือกเป็นจุดเริ่มบทแล้ว" else "ยังไม่กำหนดเป็นจุดเริ่มบท", color = Muted, fontSize = 12.sp)
+                        }
+                    }
+                    if (state.selectedMimeType == "application/pdf" || state.selectedFileName.endsWith(".pdf", true)) {
+                        OutlinedButton(
+                            onClick = { vm.setPdfPageAsCover(sourcePageIndex) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("ใช้หน้า PDF ที่กำลังดูเป็นปก (หน้า ${sourcePageIndex + 1})") }
+                        Divider(color = Line)
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            androidx.compose.material3.Checkbox(
+                                checked = selectedPageIndex in state.pagesAsImages,
+                                onCheckedChange = { checked -> vm.setPageAsImage(selectedPageIndex, checked) }
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text("เก็บหน้านี้เป็นรูปภาพใน EPUB", color = Ink, fontWeight = FontWeight.Medium)
+                                Text(if (selectedPageIndex in state.pagesAsImages) "หน้านี้จะใช้ภาพ PDF แทนข้อความ" else "หน้านี้จะใช้ข้อความที่แปลงได้", color = Muted, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
+                            vm.setChapterStarts(chapterStartPages)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = state.hasConverted
+                    ) { Text("บันทึกการตั้งค่าหน้านี้") }
+                }
+                if (pages.isNotEmpty()) {
+                    Text("หน้า ${sourcePageIndex + 1} / ${state.sourcePageCount}", color = Blue, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
+                                val next = (selectedPageIndex - 1).coerceAtLeast(0)
+                                selectedPageIndex = next
+                                val pageText = pages.getOrNull(next)?.orderedContents()
+                                    ?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
+                                    ?.joinToString("\n\n") { it.plainText }.orEmpty()
+                                editorValue = TextFieldValue(AnnotatedString(pageText), selection = androidx.compose.ui.text.TextRange(pageText.length))
+                                val pageBlock = pages.getOrNull(next)?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()
+                                alignment = pageBlock?.paragraphStyle?.alignment ?: TextAlignment.START
+                                indent = pageBlock?.paragraphStyle?.firstLineIndentEm ?: 1f
+                                spacing = pageBlock?.paragraphStyle?.spacingAfterEm ?: 0.8f
+                            },
+                            enabled = state.hasConverted && selectedPageIndex > 0,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("หน้าก่อนหน้า") }
+                        OutlinedButton(
+                            onClick = {
+                                vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
+                                val next = (selectedPageIndex + 1).coerceAtMost(pages.lastIndex)
+                                selectedPageIndex = next
+                                val pageText = pages.getOrNull(next)?.orderedContents()
+                                    ?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
+                                    ?.joinToString("\n\n") { it.plainText }.orEmpty()
+                                editorValue = TextFieldValue(AnnotatedString(pageText), selection = androidx.compose.ui.text.TextRange(pageText.length))
+                                val pageBlock = pages.getOrNull(next)?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()
+                                alignment = pageBlock?.paragraphStyle?.alignment ?: TextAlignment.START
+                                indent = pageBlock?.paragraphStyle?.firstLineIndentEm ?: 1f
+                                spacing = pageBlock?.paragraphStyle?.spacingAfterEm ?: 0.8f
+                            },
+                            enabled = state.hasConverted && selectedPageIndex < pages.lastIndex,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("หน้าถัดไป") }
+                    }
+                }
+                Text("ลบเฉพาะข้อความที่เลือกในช่องแก้ไข โดยลากเลือกคำหรือบรรทัดที่ไม่ต้องการก่อน", color = Muted, fontSize = 13.sp)
+                OutlinedButton(
+                    onClick = {
+                        val start = minOf(editorValue.selection.start, editorValue.selection.end)
+                        val end = maxOf(editorValue.selection.start, editorValue.selection.end)
+                        if (start < end) {
+                            val updated = editorValue.text.removeRange(start, end)
+                            editorValue = TextFieldValue(AnnotatedString(updated), selection = androidx.compose.ui.text.TextRange(start.coerceAtMost(updated.length)))
+                            vm.updatePageManuscript(selectedPageIndex, updated, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
+                        }
+                    },
+                    enabled = state.hasConverted && !editorValue.selection.collapsed,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("ลบเฉพาะข้อความที่เลือก") }
+                OutlinedButton(
+                    onClick = {
+                        editorValue = TextFieldValue(AnnotatedString(""))
+                        vm.updatePageManuscript(selectedPageIndex, "", emptyList(), ParagraphStyle(alignment, indent, spacing))
+                    },
+                    enabled = state.hasConverted && editorValue.text.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("ลบข้อความทั้งหมดของหน้านี้") }
+                Text("แก้ข้อความของแต่ละหน้าแยกกันได้ การเปลี่ยนหน้าจะบันทึกข้อความหน้านี้ไว้ในหนังสือ", color = Muted, fontSize = 13.sp)
                 Text("เลือกข้อความในช่องแก้ไขแล้วใช้ปุ่มตัวหนา/ตัวเอียง หรือเลือกการจัดแนวและการเยื้องบรรทัดแรก", color = Muted, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
                     EditorTool(Icons.Default.FormatBold, "ตัวหนา", Modifier.weight(1f)) {
@@ -437,15 +566,39 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                         border = BorderStroke(1.dp, Line),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("พรีวิวแบบเรียลไทม์", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            Text("ต้นฉบับ PDF • หน้า ${sourcePageIndex + 1}", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("ซูมต้นฉบับ", color = Ink, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.weight(1f))
+                                OutlinedButton(onClick = { pdfPreviewZoom = (pdfPreviewZoom - 0.25f).coerceAtLeast(1f) }, enabled = pdfPreviewZoom > 1f) { Text("−") }
+                                Text("${(pdfPreviewZoom * 100).toInt()}%", color = Blue, fontSize = 12.sp)
+                                OutlinedButton(onClick = { pdfPreviewZoom = (pdfPreviewZoom + 0.25f).coerceAtMost(3f) }, enabled = pdfPreviewZoom < 3f) { Text("+") }
+                                TextButton(onClick = { pdfPreviewZoom = 1f }, enabled = pdfPreviewZoom != 1f) { Text("ขนาดเดิม") }
+                            }
+                            PdfSourcePagePreview(state.selectedUri, sourcePageIndex, pdfPreviewZoom)
+                            Divider(color = Line)
+                            Text("ข้อความหลังแก้ไข", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             Text(state.title.ifBlank { "Untitled" }, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
                             if (state.author.isNotBlank()) Text(state.author, color = Muted, fontSize = 13.sp)
-                            Text(editorValue.annotatedString, fontSize = 16.sp, lineHeight = 28.sp, color = Ink)
-                            state.book.allImages().forEach { image ->
-                                ImportedImagePreview(image.image.sourceUri, image.image.altText)
-                                Text("ภาพ: ${image.image.altText}", color = Muted, fontSize = 12.sp)
-                                if (image.image.caption.isNotBlank()) Text(image.image.caption, color = Muted, fontSize = 12.sp)
-                            }
+                            Text(
+                                editorValue.annotatedString,
+                                fontSize = 16.sp,
+                                lineHeight = 28.sp,
+                                color = Ink,
+                                textAlign = when (alignment) {
+                                    TextAlignment.START -> TextAlign.Start
+                                    TextAlignment.CENTER -> TextAlign.Center
+                                    TextAlignment.END -> TextAlign.End
+                                    TextAlignment.JUSTIFY -> TextAlign.Justify
+                                }
+                            )
+                            state.sourcePages.getOrNull(selectedPageIndex)?.orderedContents()
+                                ?.filterIsInstance<com.mimee.epubmaker.domain.model.ImageBlock>()?.forEach { image ->
+                                    ImportedImagePreview(image.image.sourceUri, image.image.altText)
+                                    if (image.image.caption.isNotBlank()) Text(image.image.caption, color = Muted, fontSize = 12.sp)
+                                }
                         }
                     }
                 }
@@ -504,6 +657,53 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     }
 }
 
+
+private fun sourcePageIndexForChapter(chapter: com.mimee.epubmaker.domain.model.Chapter?, fallbackIndex: Int, pageCount: Int): Int {
+    val title = chapter?.title.orEmpty()
+    val match = Regex("""หน้า\s*(\d+)""").find(title)
+    val pageNumber = match?.groupValues?.getOrNull(1)?.toIntOrNull()
+    return ((pageNumber?.minus(1) ?: fallbackIndex).coerceAtLeast(0))
+        .coerceAtMost((pageCount - 1).coerceAtLeast(0))
+}
+
+@Composable
+private fun PdfSourcePagePreview(uri: Uri?, pageIndex: Int, zoom: Float) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bitmap by produceState<Bitmap?>(null, uri, pageIndex) {
+        // Clear the previous page immediately so it cannot masquerade as the newly selected page
+        // while the next PDF page is being rendered asynchronously.
+        value = null
+        value = withContext(Dispatchers.IO) {
+            if (uri == null) null else runCatching {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                    PdfRenderer(descriptor).use rendererUse@{ renderer ->
+                        if (pageIndex !in 0 until renderer.pageCount) return@rendererUse null
+                        renderer.openPage(pageIndex).use { page ->
+                            val scale = minOf(1.6f, 1200f / page.width.toFloat())
+                            val width = (page.width * scale).toInt().coerceAtLeast(1)
+                            val height = (page.height * scale).toInt().coerceAtLeast(1)
+                            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { target ->
+                                target.eraseColor(android.graphics.Color.WHITE)
+                                val matrix = android.graphics.Matrix().apply { setScale(scale, scale) }
+                                page.render(target, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            }
+                        }
+                    }
+                }
+            }.getOrNull()
+        }
+    }
+    if (bitmap != null) {
+        ComposeImage(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = "หน้าต้นฉบับ PDF ${pageIndex + 1}",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(10.dp)).graphicsLayer(scaleX = zoom, scaleY = zoom)
+        )
+    } else {
+        Text("ไม่สามารถแสดงหน้าต้นฉบับได้", color = Muted, fontSize = 12.sp)
+    }
+}
 
 @Composable
 private fun ImportedImagePreview(sourceUri: String, altText: String) {
@@ -579,12 +779,23 @@ private fun BearReadingMascot(modifier: Modifier = Modifier) {
         circle(28f, 23f, 8f, Color(0xFFE9B99A))
         circle(72f, 23f, 8f, Color(0xFFE9B99A))
         circle(50f, 43f, 31f, Color(0xFFB9825D))
-        circle(39f, 40f, 3f, Ink)
-        circle(61f, 40f, 3f, Ink)
+        circle(39f, 39f, 3.2f, Ink)
+        circle(61f, 39f, 3.2f, Ink)
+        circle(40f, 38f, 0.9f, Color.White)
+        circle(62f, 38f, 0.9f, Color.White)
+        circle(32f, 48f, 4.2f, Color(0xFFEBA3A0))
+        circle(68f, 48f, 4.2f, Color(0xFFEBA3A0))
         circle(50f, 51f, 12f, Color(0xFFF3D7BE))
-        circle(50f, 48f, 3.5f, Ink)
-        drawLine(Ink, androidx.compose.ui.geometry.Offset(50f * sx, 51f * sy), androidx.compose.ui.geometry.Offset(46f * sx, 55f * sy), strokeWidth = 1.6f * sx)
-        drawLine(Ink, androidx.compose.ui.geometry.Offset(50f * sx, 51f * sy), androidx.compose.ui.geometry.Offset(54f * sx, 55f * sy), strokeWidth = 1.6f * sx)
+        circle(50f, 47f, 3.5f, Ink)
+        val happySmile = Path().apply {
+            moveTo(43f * sx, 52f * sy)
+            quadraticBezierTo(50f * sx, 61f * sy, 57f * sx, 52f * sy)
+        }
+        drawPath(
+            happySmile,
+            Ink,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f * sx)
+        )
         drawRoundRect(Color(0xFF6BA7D9), topLeft = androidx.compose.ui.geometry.Offset(18f * sx, 68f * sy), size = androidx.compose.ui.geometry.Size(64f * sx, 23f * sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(5f * sx))
         val leftPage = Path().apply {
             moveTo(50f * sx, 71f * sy); lineTo(22f * sx, 67f * sy); lineTo(22f * sx, 84f * sy); lineTo(50f * sx, 88f * sy); close()

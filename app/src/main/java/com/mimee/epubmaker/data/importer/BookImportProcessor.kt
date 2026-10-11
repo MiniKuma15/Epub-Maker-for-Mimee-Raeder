@@ -33,6 +33,7 @@ class BookImportProcessor(private val context: Context) {
         title: String,
         author: String,
         keepScannedPagesAsImages: Boolean,
+        extractEmbeddedTextOnly: Boolean = false,
         ocrEngine: String,
         serverUrl: String,
         serverToken: String,
@@ -46,20 +47,22 @@ class BookImportProcessor(private val context: Context) {
                     stripper.startPage = pageNumber
                     stripper.endPage = pageNumber
                     stripper.sortByPosition = true
-                    stripper.getText(document).trim()
+                    PdfOcrEngine.cleanRecognizedText(stripper.getText(document)).trim()
                 }
             }
         } ?: error("เปิดไฟล์ PDF ไม่ได้")
 
         val contents = mutableListOf<BookContent>()
+        val pageChapters = mutableListOf<Chapter>()
         val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
             ?: error("เปิดไฟล์ PDF เพื่อเรนเดอร์ไม่ได้")
         descriptor.use { pfd ->
             PdfRenderer(pfd).use { renderer ->
                 require(renderer.pageCount > 0) { "PDF ไม่มีหน้า" }
                 for (index in 0 until renderer.pageCount) {
+                    val pageStart = contents.size
                     onProgress(index + 1, renderer.pageCount, "กำลังอ่านหน้า ${index + 1}/${renderer.pageCount}")
-                    val text = pageText.getOrNull(index).orEmpty()
+                    val text = PdfOcrEngine.cleanRecognizedText(pageText.getOrNull(index).orEmpty())
                     if (text.isNotBlank()) {
                         splitParagraphs(text).forEach { paragraph ->
                             contents += TextBlock.paragraph(paragraph, order = contents.size)
@@ -68,7 +71,7 @@ class BookImportProcessor(private val context: Context) {
                         renderer.openPage(index).use { page ->
                             val bitmap = renderPage(page)
                             try {
-                                if (keepScannedPagesAsImages) {
+                                if (keepScannedPagesAsImages || extractEmbeddedTextOnly) {
                                     val saved = saveBitmap(bitmap, "pdf-page-${index + 1}")
                                     contents += ImageBlock(
                                         order = contents.size,
@@ -84,9 +87,9 @@ class BookImportProcessor(private val context: Context) {
                                         handling = ImageHandling.EMBED_AS_IMAGE
                                     )
                                 } else {
-                                    val recognized = PdfOcrEngine.recognizeBitmap(
+                                    val recognized = PdfOcrEngine.cleanRecognizedText(PdfOcrEngine.recognizeBitmap(
                                         context, bitmap, ocrEngine, serverUrl, serverToken
-                                    )
+                                    ))
                                     if (recognized.isNotBlank()) {
                                         contents += TextBlock.paragraph(
                                             recognized,
@@ -114,6 +117,19 @@ class BookImportProcessor(private val context: Context) {
                             }
                         }
                     }
+                    val pageItems = contents.drop(pageStart).mapIndexed { itemIndex, item ->
+                        when (item) {
+                            is TextBlock -> item.copy(order = itemIndex)
+                            is ImageBlock -> item.copy(order = itemIndex)
+                        }
+                    }
+                    // Keep an entry for EVERY source PDF page, including blank pages.
+                    // Otherwise a blank page is dropped and editor index N points at a different PDF page.
+                    pageChapters += Chapter(
+                        title = "หน้า ${index + 1}",
+                        order = index,
+                        contents = pageItems
+                    )
                 }
             }
         }
@@ -126,7 +142,7 @@ class BookImportProcessor(private val context: Context) {
                 sourceFileName = "document.pdf",
                 sourceMimeType = "application/pdf"
             ),
-            chapters = listOf(Chapter(title = title.ifBlank { "เนื้อหา" }, order = 0, contents = contents)),
+            chapters = pageChapters.ifEmpty { listOf(Chapter(title = title.ifBlank { "เนื้อหา" }, order = 0, contents = contents)) },
             coverImage = firstImage?.let {
                 CoverImage(
                     source = CoverSource.ExistingImage(it.id),

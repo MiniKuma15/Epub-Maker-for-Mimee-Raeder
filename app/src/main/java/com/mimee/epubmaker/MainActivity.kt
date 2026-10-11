@@ -577,7 +577,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                                     TextAlignment.JUSTIFY -> TextAlign.Justify
                                 }
                             )
-                            state.book.orderedChapters().getOrNull(selectedPageIndex)?.orderedContents()
+                            state.sourcePages.getOrNull(selectedPageIndex)?.orderedContents()
                                 ?.filterIsInstance<com.mimee.epubmaker.domain.model.ImageBlock>()?.forEach { image ->
                                     ImportedImagePreview(image.image.sourceUri, image.image.altText)
                                     if (image.image.caption.isNotBlank()) Text(image.image.caption, color = Muted, fontSize = 12.sp)

@@ -43,6 +43,7 @@ data class EpubMakerUiState(
     val status: String = "เลือกไฟล์ PDF, JPG หรือ PNG จากนั้นกดเริ่มแปลง",
     val error: String? = null,
     val hasConverted: Boolean = false,
+    val sourcePageCount: Int = 0,
     val isExporting: Boolean = false
 )
 
@@ -50,6 +51,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
     private val _state = MutableStateFlow(EpubMakerUiState())
     val state: StateFlow<EpubMakerUiState> = _state.asStateFlow()
     private val processor = BookImportProcessor(application)
+    private var sourcePageChapters: List<Chapter> = emptyList()
 
     fun selectSource(uri: Uri, mimeType: String, displayName: String) {
         _state.update {
@@ -139,8 +141,10 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     }
                 }
+                sourcePageChapters = book.orderedChapters().sortedBy { it.order }
                 _state.update { current ->
                     current.copy(
+                        sourcePageCount = sourcePageChapters.maxOfOrNull { it.order + 1 } ?: 1,
                         book = book.copy(
                             coverImage = current.book.coverImage ?: book.coverImage,
                             metadata = book.metadata.copy(
@@ -281,6 +285,46 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
             if (pieces.isEmpty()) listOf(RichTextRun(text.substring(start, end))) else pieces
+        }
+    }
+
+    fun setChapterStarts(startPages: Set<Int>) {
+        _state.update { current ->
+            val sourcePages = sourcePageChapters.sortedBy { it.order }
+            if (sourcePages.isEmpty()) return@update current
+            val starts = (startPages + 0).filter { it >= 0 }.toSet()
+            val grouped = mutableListOf<MutableList<com.mimee.epubmaker.domain.model.BookContent>>()
+            val groupStartPages = mutableListOf<Int>()
+            var previousPageOrder = -1
+            sourcePages.forEach { page ->
+                val shouldStart = grouped.isEmpty() || starts.any { it > previousPageOrder && it <= page.order }
+                if (shouldStart) {
+                    grouped += mutableListOf()
+                    groupStartPages += page.order
+                }
+                grouped.last().addAll(page.orderedContents())
+                previousPageOrder = page.order
+            }
+            val chapters = grouped.mapIndexed { index, items ->
+                val normalized = items.mapIndexed { itemIndex, item ->
+                    when (item) {
+                        is TextBlock -> item.copy(order = itemIndex)
+                        is ImageBlock -> item.copy(order = itemIndex)
+                    }
+                }
+                val startPage = (groupStartPages.getOrNull(index) ?: 0) + 1
+                val nextStart = groupStartPages.getOrNull(index + 1)
+                val endPage = if (nextStart != null) nextStart else current.sourcePageCount
+                Chapter(
+                    title = if (endPage > startPage) "บทที่ ${index + 1} (หน้า ${startPage}–${endPage})" else "บทที่ ${index + 1} (หน้า ${startPage})",
+                    order = index,
+                    contents = normalized
+                )
+            }
+            current.copy(
+                book = current.book.copy(chapters = chapters, modifiedAt = Instant.now()),
+                status = "กำหนดบทจากหน้า PDF แล้ว: ${chapters.size} บท"
+            )
         }
     }
 

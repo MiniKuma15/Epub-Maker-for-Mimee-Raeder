@@ -159,7 +159,9 @@ def _easy_reader():
 def _paddle_reader(version: str = "PP-OCRv5"):
     if version not in _paddle_reader_instances:
         from paddleocr import PaddleOCR
-        _paddle_reader_instances[version] = PaddleOCR(lang="th", ocr_version=version)
+        # PP-OCRv4 does not provide Thai recognition; PP-OCRv5 has a Thai+English model.
+        language = "en" if version == "PP-OCRv4" else "th"
+        _paddle_reader_instances[version] = PaddleOCR(lang=language, ocr_version=version)
     return _paddle_reader_instances[version]
 
 

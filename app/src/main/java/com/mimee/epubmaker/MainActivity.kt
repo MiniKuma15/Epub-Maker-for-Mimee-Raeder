@@ -401,12 +401,15 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                     }
                     Button(
                         onClick = {
+                            val firstEnd = chapterStartPages.filter { it > 0 }.minOrNull() ?: state.sourcePageCount
+                            val text = pages.filter { it.order < firstEnd }.joinToString("\n\n") { chapter ->
+                                if (chapter.order == selectedPageIndex) editorValue.text
+                                else chapter.orderedContents().filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
+                                    .joinToString("\n\n") { it.plainText }
+                            }
                             vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
                             vm.setChapterStarts(chapterStartPages)
                             selectedPageIndex = 0
-                            val firstChapter = state.book.orderedChapters().firstOrNull()
-                            val text = firstChapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
-                                ?.joinToString("\n\n") { it.plainText }.orEmpty()
                             editorValue = TextFieldValue(AnnotatedString(text), selection = androidx.compose.ui.text.TextRange(text.length))
                         },
                         modifier = Modifier.fillMaxWidth(),

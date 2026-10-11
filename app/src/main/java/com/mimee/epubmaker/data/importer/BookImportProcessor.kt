@@ -47,7 +47,7 @@ class BookImportProcessor(private val context: Context) {
                     stripper.startPage = pageNumber
                     stripper.endPage = pageNumber
                     stripper.sortByPosition = true
-                    stripper.getText(document).trim()
+                    PdfOcrEngine.cleanRecognizedText(stripper.getText(document)).trim()
                 }
             }
         } ?: error("เปิดไฟล์ PDF ไม่ได้")
@@ -62,7 +62,7 @@ class BookImportProcessor(private val context: Context) {
                 for (index in 0 until renderer.pageCount) {
                     val pageStart = contents.size
                     onProgress(index + 1, renderer.pageCount, "กำลังอ่านหน้า ${index + 1}/${renderer.pageCount}")
-                    val text = pageText.getOrNull(index).orEmpty()
+                    val text = PdfOcrEngine.cleanRecognizedText(pageText.getOrNull(index).orEmpty())
                     if (text.isNotBlank()) {
                         splitParagraphs(text).forEach { paragraph ->
                             contents += TextBlock.paragraph(paragraph, order = contents.size)
@@ -87,9 +87,9 @@ class BookImportProcessor(private val context: Context) {
                                         handling = ImageHandling.EMBED_AS_IMAGE
                                     )
                                 } else {
-                                    val recognized = PdfOcrEngine.recognizeBitmap(
+                                    val recognized = PdfOcrEngine.cleanRecognizedText(PdfOcrEngine.recognizeBitmap(
                                         context, bitmap, ocrEngine, serverUrl, serverToken
-                                    )
+                                    ))
                                     if (recognized.isNotBlank()) {
                                         contents += TextBlock.paragraph(
                                             recognized,

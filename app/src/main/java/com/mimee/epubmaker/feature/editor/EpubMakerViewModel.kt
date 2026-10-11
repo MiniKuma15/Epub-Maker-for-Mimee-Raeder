@@ -426,6 +426,8 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
             val chapters = current.book.orderedChapters().toMutableList()
             if (chapterIndex !in chapters.indices) return@update current
             val chapter = chapters[chapterIndex]
+            // A page deliberately converted to an image must not regain its OCR text during navigation/export.
+            if (chapter.orderedContents().isNotEmpty() && chapter.orderedContents().all { it is ImageBlock }) return@update current
             val normalizedRuns = if (runs.isEmpty() && text.isNotEmpty()) listOf(RichTextRun(text)) else runs
             val paragraphs = splitRichRunsIntoParagraphs(text, normalizedRuns)
             val replacements = paragraphs.mapIndexed { index, paragraph ->

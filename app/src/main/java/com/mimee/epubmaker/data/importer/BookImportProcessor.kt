@@ -123,13 +123,13 @@ class BookImportProcessor(private val context: Context) {
                             is ImageBlock -> item.copy(order = itemIndex)
                         }
                     }
-                    if (pageItems.isNotEmpty()) {
-                        pageChapters += Chapter(
-                            title = "หน้า ${index + 1}",
-                            order = index,
-                            contents = pageItems
-                        )
-                    }
+                    // Keep an entry for EVERY source PDF page, including blank pages.
+                    // Otherwise a blank page is dropped and editor index N points at a different PDF page.
+                    pageChapters += Chapter(
+                        title = "หน้า ${index + 1}",
+                        order = index,
+                        contents = pageItems
+                    )
                 }
             }
         }

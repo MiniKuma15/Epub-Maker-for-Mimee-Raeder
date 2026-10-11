@@ -8,7 +8,7 @@ Android EPUB 3 maker built with Kotlin, Jetpack Compose and MVVM.
 - Input: PDF, JPG and PNG via Android's Storage Access Framework.
 - PDF text extraction using PDFBox-Android, with page-by-page rendering for scanned pages.
 - Offline-on-phone OCR using Tesseract for Thai and English; Google ML Kit bundled Latin OCR is also available for Latin-script text. ML Kit's Latin model does not support Thai directly.
-- Selectable OCR engines: PaddleOCR PP-OCRv4/v5, EasyOCR, PaddleOCR-VL, Google Cloud Vision, Google Document AI, Gemini Vision, Qwen2.5-VL, GPT-4o Vision and Claude Vision through the OCR backend. Tesseract and ML Kit run on the phone; Paddle/EasyOCR run on the configured server, while cloud/vision models use provider APIs. Online providers require a deployed backend and server-side credentials.
+- Selectable OCR engines: PaddleOCR PP-OCRv4 (English/Chinese only) and PP-OCRv5 (Thai + English), EasyOCR, PaddleOCR-VL, Google Cloud Vision, Google Document AI, Gemini Vision, Qwen2.5-VL, GPT-4o Vision and Claude Vision through the OCR backend. Tesseract and ML Kit run on the phone; Paddle/EasyOCR run on the configured server, while cloud/vision models use provider APIs. Online providers require a deployed backend and server-side credentials.
 - Structured EPUB domain model: Book, Chapter, TextBlock, ImageBlock, RichTextRun, ParagraphStyle, BookMetadata and CoverImage.
 - Rich text editor: bold, italic, alignment, first-line indentation and paragraph spacing.
 - Scanned page retention: pages with no embedded text can be embedded as images instead of OCR. Imported images can be kept alongside OCR text.

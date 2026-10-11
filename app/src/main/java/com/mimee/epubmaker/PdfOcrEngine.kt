@@ -18,12 +18,47 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.text.Normalizer
 
 /** PDF page renderer with on-device Tesseract and selectable remote OCR engines. */
 internal object PdfOcrEngine {
     private const val DATA_DIR = "tesseract"
     private const val LANG_DIR = "tessdata"
     private const val BASE_URL = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/"
+
+    /**
+     * Conservative cleanup for OCR/PDF text. NFC composes canonically equivalent Thai
+     * sequences without compatibility-folding valid Thai letters such as SARA AM (ำ).
+     * Only known garbage glyphs and invalid Unicode categories are removed.
+     */
+    internal fun cleanRecognizedText(input: String): String {
+        val normalized = Normalizer.normalize(input, Normalizer.Form.NFC)
+        val output = StringBuilder(normalized.length)
+        normalized.codePoints().forEach { cp ->
+            val type = Character.getType(cp)
+            val knownOcrArtifact = cp in setOf(
+                0x25A0, // ■ black square
+                0x25A1, // □ empty square often substituted for missing glyph
+                0x25B2, // ▲ black triangle
+                0x25B6, // ▶ black triangle
+                0x25BC, // ▼ black triangle
+                0x25C0, // ◀ black triangle
+                0xFFFD  // replacement character
+            )
+            val invalidControl = type == Character.CONTROL.toInt() && cp !in setOf(0x09, 0x0A, 0x0D)
+            val invalidFormat = type == Character.FORMAT.toInt() && cp !in setOf(0x200C, 0x200D)
+            val invalidPrivate = type == Character.PRIVATE_USE.toInt() ||
+                type == Character.SURROGATE.toInt() || type == Character.UNASSIGNED.toInt()
+            if (!knownOcrArtifact && !invalidControl && !invalidFormat && !invalidPrivate) {
+                output.appendCodePoint(cp)
+            }
+        }
+        return output.toString()
+            .replace(Regex("[ \\t]+\\n"), "\\n")
+            .replace(Regex("\\n[ \\t]+"), "\\n")
+            .replace(Regex("\\n{3,}"), "\\n\\n")
+            .trim()
+    }
 
     fun recognize(
         context: Context,
@@ -67,14 +102,14 @@ internal object PdfOcrEngine {
                             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                             try {
                                 val recognized = when {
-                                    api != null -> { api.setImage(bitmap); api.getUTF8Text() ?: "" }
+                                    api != null -> { api.setImage(bitmap); cleanRecognizedText(api.getUTF8Text() ?: "") }
                                     engine == "mlkit-latin" -> recognizeMlKitLatin(bitmap)
                                     else -> recognizeRemote(bitmap, engine, serverUrl, serverToken)
                                 }
                                 if (recognized.isNotBlank()) {
                                     if (output.isNotEmpty()) output.append("\n\n")
                                     output.append("— หน้า ${index + 1} —\n")
-                                    output.append(recognized.trim())
+                                    output.append(cleanRecognizedText(recognized).trim())
                                 }
                                 // Publish accumulated text after every page so long OCR jobs visibly produce results.
                                 onPartialResult(output.toString())
@@ -115,9 +150,9 @@ internal object PdfOcrEngine {
                     api.end()
                 }
             }
-            "mlkit-latin" -> recognizeMlKitLatin(bitmap).trim()
+            "mlkit-latin" -> cleanRecognizedText(recognizeMlKitLatin(bitmap)).trim()
             "paddleocr", "paddleocr-v4", "paddleocr-v5", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai", "qwen2.5-vl", "gpt-4o", "claude-vision" ->
-                recognizeRemote(bitmap, engine, serverUrl, serverToken).trim()
+                cleanRecognizedText(recognizeRemote(bitmap, engine, serverUrl, serverToken)).trim()
             else -> error("ไม่รู้จัก OCR Engine: $engine")
         }
     }

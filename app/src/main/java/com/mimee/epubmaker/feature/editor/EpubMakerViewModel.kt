@@ -188,21 +188,27 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun setPdfFirstPageAsCover() {
+    fun setPdfFirstPageAsCover() = setPdfPageAsCover(0)
+
+    fun setPdfPageAsCover(pageIndex: Int) {
         val current = _state.value
         val uri = current.selectedUri ?: return
         if (current.selectedMimeType != "application/pdf" && !current.selectedFileName.endsWith(".pdf", true)) {
-            _state.update { it.copy(error = "เลือกไฟล์ PDF ก่อนตั้งหน้าปกจากหน้าแรก") }
+            _state.update { it.copy(error = "เลือกไฟล์ PDF ก่อนตั้งหน้าปกจากหน้า PDF") }
+            return
+        }
+        if (pageIndex !in 0 until current.sourcePageCount.coerceAtLeast(1)) {
+            _state.update { it.copy(error = "หน้าปกอยู่นอกช่วงหน้า PDF") }
             return
         }
         _state.update { state ->
             val cover = CoverImage(
-                source = CoverSource.PdfPage(uri.toString(), 0),
+                source = CoverSource.PdfPage(uri.toString(), pageIndex),
                 altText = state.title.ifBlank { "ปกหนังสือ" },
                 mimeType = "image/jpeg",
                 fileName = "cover.jpg"
             )
-            state.copy(book = state.book.copy(coverImage = cover), status = "ตั้งหน้าแรกของ PDF เป็นปกแล้ว")
+            state.copy(book = state.book.copy(coverImage = cover), status = "ตั้งหน้า ${pageIndex + 1} ของ PDF เป็นปกแล้ว")
         }
     }
 

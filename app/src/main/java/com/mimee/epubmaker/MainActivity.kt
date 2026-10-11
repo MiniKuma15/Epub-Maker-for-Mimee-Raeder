@@ -430,7 +430,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                     ) { Text("บันทึกการตั้งค่าหน้านี้") }
                 }
                 if (pages.isNotEmpty()) {
-                    Text("หน้า ${selectedPageIndex + 1} / ${pages.size}", color = Blue, fontWeight = FontWeight.SemiBold)
+                    Text("หน้า ${sourcePageIndex + 1} / ${state.sourcePageCount}", color = Blue, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(
                             onClick = {
@@ -670,6 +670,9 @@ private fun sourcePageIndexForChapter(chapter: com.mimee.epubmaker.domain.model.
 private fun PdfSourcePagePreview(uri: Uri?, pageIndex: Int, zoom: Float) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap by produceState<Bitmap?>(null, uri, pageIndex) {
+        // Clear the previous page immediately so it cannot masquerade as the newly selected page
+        // while the next PDF page is being rendered asynchronously.
+        value = null
         value = withContext(Dispatchers.IO) {
             if (uri == null) null else runCatching {
                 context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->

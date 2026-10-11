@@ -387,57 +387,42 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                 val pages = state.book.orderedChapters()
                 val sourcePageIndex = sourcePageIndexForChapter(pages.getOrNull(selectedPageIndex), selectedPageIndex, state.sourcePageCount)
                 if (state.hasConverted && state.sourcePageCount > 0) {
-                    Text("กำหนดหน้าเริ่มบท", fontWeight = FontWeight.SemiBold, color = Ink)
-                    Text("ทุกหน้าจะยังไม่ถูกเลือกโดยอัตโนมัติ เลือกเฉพาะหน้าที่ต้องการเริ่มบทใหม่ แล้วกดใช้การแบ่งบท (หน้าแรกเป็นจุดเริ่มหนังสืออยู่แล้ว)", color = Muted, fontSize = 12.sp)
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        (0 until state.sourcePageCount).forEach { pageIndex ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                androidx.compose.material3.Checkbox(
-                                    checked = pageIndex in chapterStartPages,
-                                    onCheckedChange = { checked ->
-                                        chapterStartPages = if (checked) chapterStartPages + pageIndex else chapterStartPages - pageIndex
-                                    }
-                                )
-                                Text("หน้า ${pageIndex + 1} ${if (pageIndex in chapterStartPages) "— เริ่มบท" else "— ต่อจากบทก่อน"}", color = Ink, fontSize = 13.sp)
+                    Text("ตั้งค่าหน้าปัจจุบัน", fontWeight = FontWeight.SemiBold, color = Ink)
+                    Text("เลือกหน้าจากปุ่มก่อนหน้า/ถัดไป แล้วตั้งค่าหน้านี้ได้เลย ไม่ต้องเลื่อนดูรายการทุกหน้า", color = Muted, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        androidx.compose.material3.Checkbox(
+                            checked = selectedPageIndex in chapterStartPages,
+                            onCheckedChange = { checked ->
+                                chapterStartPages = if (checked) chapterStartPages + selectedPageIndex else chapterStartPages - selectedPageIndex
+                                vm.setChapterStarts(chapterStartPages)
                             }
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("หน้านี้เป็นบทใหม่ในสารบัญ (Index)", color = Ink, fontWeight = FontWeight.Medium)
+                            Text(if (selectedPageIndex in chapterStartPages) "เลือกเป็นจุดเริ่มบทแล้ว" else "ยังไม่กำหนดเป็นจุดเริ่มบท", color = Muted, fontSize = 12.sp)
                         }
                     }
                     if (state.selectedMimeType == "application/pdf" || state.selectedFileName.endsWith(".pdf", true)) {
                         Divider(color = Line)
-                        Text("เลือกหน้าที่ต้องการเก็บเป็นรูปภาพ", fontWeight = FontWeight.SemiBold, color = Ink)
-                        Text("ติ๊กแล้ว EPUB จะใช้ภาพเต็มหน้าจาก PDF แทนข้อความ OCR ของหน้านั้น", color = Muted, fontSize = 12.sp)
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            (0 until state.sourcePageCount).forEach { pageIndex ->
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                    androidx.compose.material3.Checkbox(
-                                        checked = pageIndex in state.pagesAsImages,
-                                        onCheckedChange = { checked -> vm.setPageAsImage(pageIndex, checked) }
-                                    )
-                                    Text(
-                                        "หน้า ${pageIndex + 1} ${if (pageIndex in state.pagesAsImages) "— ใช้รูปภาพ" else "— ใช้ข้อความ"}",
-                                        color = Ink,
-                                        fontSize = 13.sp
-                                    )
-                                }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            androidx.compose.material3.Checkbox(
+                                checked = selectedPageIndex in state.pagesAsImages,
+                                onCheckedChange = { checked -> vm.setPageAsImage(selectedPageIndex, checked) }
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text("เก็บหน้านี้เป็นรูปภาพใน EPUB", color = Ink, fontWeight = FontWeight.Medium)
+                                Text(if (selectedPageIndex in state.pagesAsImages) "หน้านี้จะใช้ภาพ PDF แทนข้อความ" else "หน้านี้จะใช้ข้อความที่แปลงได้", color = Muted, fontSize = 12.sp)
                             }
                         }
                     }
                     Button(
                         onClick = {
-                            val firstEnd = chapterStartPages.filter { it > 0 }.minOrNull() ?: state.sourcePageCount
-                            val text = pages.filter { it.order < firstEnd }.joinToString("\n\n") { chapter ->
-                                if (chapter.order == selectedPageIndex) editorValue.text
-                                else chapter.orderedContents().filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
-                                    .joinToString("\n\n") { it.plainText }
-                            }
                             vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
                             vm.setChapterStarts(chapterStartPages)
-                            selectedPageIndex = 0
-                            editorValue = TextFieldValue(AnnotatedString(text), selection = androidx.compose.ui.text.TextRange(text.length))
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = state.hasConverted
-                    ) { Text("ใช้การแบ่งบทที่เลือก") }
+                    ) { Text("บันทึกการตั้งค่าหน้านี้") }
                 }
                 if (pages.isNotEmpty()) {
                     Text("หน้า ${selectedPageIndex + 1} / ${pages.size}", color = Blue, fontWeight = FontWeight.SemiBold)
@@ -466,7 +451,20 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                         ) { Text("หน้าถัดไป") }
                     }
                 }
-                Text("ลบข้อความที่ไม่ต้องการได้โดยลบเฉพาะบรรทัดในช่องแก้ไข เช่น เลขหน้า ข้อความกึ่งกลาง หรือข้อความบนสันปก หากต้องการลบข้อความทั้งหน้าให้ใช้ปุ่มด้านล่าง", color = Muted, fontSize = 13.sp)
+                Text("ลบเฉพาะข้อความที่เลือกในช่องแก้ไข โดยลากเลือกคำหรือบรรทัดที่ไม่ต้องการก่อน", color = Muted, fontSize = 13.sp)
+                OutlinedButton(
+                    onClick = {
+                        val start = minOf(editorValue.selection.start, editorValue.selection.end)
+                        val end = maxOf(editorValue.selection.start, editorValue.selection.end)
+                        if (start < end) {
+                            val updated = editorValue.text.removeRange(start, end)
+                            editorValue = TextFieldValue(AnnotatedString(updated), selection = androidx.compose.ui.text.TextRange(start.coerceAtMost(updated.length)))
+                            vm.updatePageManuscript(selectedPageIndex, updated, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
+                        }
+                    },
+                    enabled = state.hasConverted && !editorValue.selection.collapsed,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("ลบเฉพาะข้อความที่เลือก") }
                 OutlinedButton(
                     onClick = {
                         editorValue = TextFieldValue(AnnotatedString(""))

@@ -84,6 +84,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -150,7 +151,8 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     var spacing by remember { mutableFloatStateOf(0.8f) }
     var showPreview by remember { mutableStateOf(false) }
     var selectedPageIndex by remember { mutableStateOf(0) }
-    var chapterStartPages by remember { mutableStateOf(setOf(0)) }
+    var chapterStartPages by remember { mutableStateOf(emptySet<Int>()) }
+    var pdfPreviewZoom by remember { mutableFloatStateOf(1f) }
     var showEngineMenu by remember { mutableStateOf(false) }
     var altText by remember { mutableStateOf("") }
     var caption by remember { mutableStateOf("") }
@@ -183,7 +185,8 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     LaunchedEffect(state.hasConverted, state.selectedUri) {
         if (state.hasConverted) {
             selectedPageIndex = 0
-            chapterStartPages = (0 until state.sourcePageCount.coerceAtLeast(1)).toSet()
+            chapterStartPages = emptySet()
+            pdfPreviewZoom = 1f
             showPreview = true
             val chapter = state.book.orderedChapters().firstOrNull()
             val text = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
@@ -382,10 +385,10 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
 
             SectionCard("4. แก้ไขข้อความและพรีวิว", Icons.Default.TextFields) {
                 val pages = state.book.orderedChapters()
-                val sourcePageIndex = chapterStartPages.sorted().getOrElse(selectedPageIndex) { selectedPageIndex }
+                val sourcePageIndex = sourcePageIndexForChapter(pages.getOrNull(selectedPageIndex), selectedPageIndex, state.sourcePageCount)
                 if (state.hasConverted && state.sourcePageCount > 0) {
                     Text("กำหนดหน้าเริ่มบท", fontWeight = FontWeight.SemiBold, color = Ink)
-                    Text("ติ๊กหน้าที่ต้องการให้เริ่มบทใหม่ แล้วกดใช้การแบ่งบท ค่าเริ่มต้นคือทุกหน้าแยกเป็นบท", color = Muted, fontSize = 12.sp)
+                    Text("ทุกหน้าจะยังไม่ถูกเลือกโดยอัตโนมัติ เลือกเฉพาะหน้าที่ต้องการเริ่มบทใหม่ แล้วกดใช้การแบ่งบท (หน้าแรกเป็นจุดเริ่มหนังสืออยู่แล้ว)", color = Muted, fontSize = 12.sp)
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         (0 until state.sourcePageCount).forEach { pageIndex ->
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -463,6 +466,15 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                         ) { Text("หน้าถัดไป") }
                     }
                 }
+                Text("ลบข้อความที่ไม่ต้องการได้โดยลบเฉพาะบรรทัดในช่องแก้ไข เช่น เลขหน้า ข้อความกึ่งกลาง หรือข้อความบนสันปก หากต้องการลบข้อความทั้งหน้าให้ใช้ปุ่มด้านล่าง", color = Muted, fontSize = 13.sp)
+                OutlinedButton(
+                    onClick = {
+                        editorValue = TextFieldValue(AnnotatedString(""))
+                        vm.updatePageManuscript(selectedPageIndex, "", emptyList(), ParagraphStyle(alignment, indent, spacing))
+                    },
+                    enabled = state.hasConverted && editorValue.text.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("ลบข้อความทั้งหมดของหน้านี้") }
                 Text("แก้ข้อความของแต่ละหน้าแยกกันได้ การเปลี่ยนหน้าจะบันทึกข้อความหน้านี้ไว้ในหนังสือ", color = Muted, fontSize = 13.sp)
                 Text("เลือกข้อความในช่องแก้ไขแล้วใช้ปุ่มตัวหนา/ตัวเอียง หรือเลือกการจัดแนวและการเยื้องบรรทัดแรก", color = Muted, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
@@ -542,7 +554,15 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("พรีวิวแบบเรียลไทม์", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
                             Text("ต้นฉบับ PDF • หน้า ${sourcePageIndex + 1}", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                            PdfSourcePagePreview(state.selectedUri, sourcePageIndex)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("ซูมต้นฉบับ", color = Ink, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.weight(1f))
+                                OutlinedButton(onClick = { pdfPreviewZoom = (pdfPreviewZoom - 0.25f).coerceAtLeast(1f) }, enabled = pdfPreviewZoom > 1f) { Text("−") }
+                                Text("${(pdfPreviewZoom * 100).toInt()}%", color = Blue, fontSize = 12.sp)
+                                OutlinedButton(onClick = { pdfPreviewZoom = (pdfPreviewZoom + 0.25f).coerceAtMost(3f) }, enabled = pdfPreviewZoom < 3f) { Text("+") }
+                                TextButton(onClick = { pdfPreviewZoom = 1f }, enabled = pdfPreviewZoom != 1f) { Text("ขนาดเดิม") }
+                            }
+                            PdfSourcePagePreview(state.selectedUri, sourcePageIndex, pdfPreviewZoom)
                             Divider(color = Line)
                             Text("ข้อความหลังแก้ไข", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             Text(state.title.ifBlank { "Untitled" }, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
@@ -623,8 +643,16 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
 }
 
 
+private fun sourcePageIndexForChapter(chapter: com.mimee.epubmaker.domain.model.Chapter?, fallbackIndex: Int, pageCount: Int): Int {
+    val title = chapter?.title.orEmpty()
+    val match = Regex("""หน้า\s*(\d+)""").find(title)
+    val pageNumber = match?.groupValues?.getOrNull(1)?.toIntOrNull()
+    return ((pageNumber?.minus(1) ?: fallbackIndex).coerceAtLeast(0))
+        .coerceAtMost((pageCount - 1).coerceAtLeast(0))
+}
+
 @Composable
-private fun PdfSourcePagePreview(uri: Uri?, pageIndex: Int) {
+private fun PdfSourcePagePreview(uri: Uri?, pageIndex: Int, zoom: Float) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap by produceState<Bitmap?>(null, uri, pageIndex) {
         value = withContext(Dispatchers.IO) {
@@ -652,7 +680,7 @@ private fun PdfSourcePagePreview(uri: Uri?, pageIndex: Int) {
             bitmap = bitmap!!.asImageBitmap(),
             contentDescription = "หน้าต้นฉบับ PDF ${pageIndex + 1}",
             contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(10.dp))
+            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(10.dp)).graphicsLayer(scaleX = zoom, scaleY = zoom)
         )
     } else {
         Text("ไม่สามารถแสดงหน้าต้นฉบับได้", color = Muted, fontSize = 12.sp)

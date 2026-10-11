@@ -1,6 +1,9 @@
 package com.mimee.epubmaker.feature.editor
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,6 +16,8 @@ import com.mimee.epubmaker.domain.model.Chapter
 import com.mimee.epubmaker.domain.model.CoverImage
 import com.mimee.epubmaker.domain.model.CoverSource
 import com.mimee.epubmaker.domain.model.ImageBlock
+import com.mimee.epubmaker.domain.model.ImageAsset
+import com.mimee.epubmaker.domain.model.ImageHandling
 import com.mimee.epubmaker.domain.model.RichTextRun
 import com.mimee.epubmaker.domain.model.TextBlock
 import com.mimee.epubmaker.domain.model.ParagraphStyle
@@ -23,6 +28,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
 import java.time.Instant
 
 data class EpubMakerUiState(
@@ -44,6 +52,7 @@ data class EpubMakerUiState(
     val error: String? = null,
     val hasConverted: Boolean = false,
     val sourcePageCount: Int = 0,
+    val pagesAsImages: Set<Int> = emptySet(),
     val isExporting: Boolean = false
 )
 
@@ -52,6 +61,8 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
     val state: StateFlow<EpubMakerUiState> = _state.asStateFlow()
     private val processor = BookImportProcessor(application)
     private var sourcePageChapters: List<Chapter> = emptyList()
+    private val pageImageBlocks = mutableMapOf<Int, ImageBlock>()
+    private var selectedChapterStarts: Set<Int> = setOf(0)
 
     fun selectSource(uri: Uri, mimeType: String, displayName: String) {
         _state.update {
@@ -62,7 +73,8 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                 book = Book(metadata = BookMetadata(title = it.title, authors = it.author.takeIf { author -> author.isNotBlank() }?.let(::listOf).orEmpty())),
                 status = "เลือกไฟล์แล้ว: $displayName — ยังไม่ได้เริ่มประมวลผล",
                 error = null,
-                hasConverted = false
+                hasConverted = false,
+                pagesAsImages = emptySet()
             )
         }
     }
@@ -142,6 +154,8 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
                 sourcePageChapters = book.orderedChapters().sortedBy { it.order }
+                pageImageBlocks.clear()
+                selectedChapterStarts = setOf(0)
                 _state.update { current ->
                     current.copy(
                         sourcePageCount = sourcePageChapters.maxOfOrNull { it.order + 1 } ?: 1,
@@ -289,42 +303,121 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun setChapterStarts(startPages: Set<Int>) {
+        val starts = (startPages + 0).filter { it >= 0 }.toSet()
+        selectedChapterStarts = starts
         _state.update { current ->
-            val sourcePages = sourcePageChapters.sortedBy { it.order }
-            if (sourcePages.isEmpty()) return@update current
-            val starts = (startPages + 0).filter { it >= 0 }.toSet()
-            val grouped = mutableListOf<MutableList<com.mimee.epubmaker.domain.model.BookContent>>()
-            val groupStartPages = mutableListOf<Int>()
-            var previousPageOrder = -1
-            sourcePages.forEach { page ->
-                val shouldStart = grouped.isEmpty() || starts.any { it > previousPageOrder && it <= page.order }
-                if (shouldStart) {
-                    grouped.add(mutableListOf())
-                    groupStartPages += page.order
-                }
-                grouped.last().addAll(page.orderedContents())
-                previousPageOrder = page.order
-            }
-            val chapters = grouped.mapIndexed { index, items ->
-                val normalized = items.mapIndexed { itemIndex, item ->
-                    when (item) {
-                        is TextBlock -> item.copy(order = itemIndex)
-                        is ImageBlock -> item.copy(order = itemIndex)
-                    }
-                }
-                val startPage = (groupStartPages.getOrNull(index) ?: 0) + 1
-                val nextStart = groupStartPages.getOrNull(index + 1)
-                val endPage = if (nextStart != null) nextStart else current.sourcePageCount
-                Chapter(
-                    title = if (endPage > startPage) "บทที่ ${index + 1} (หน้า ${startPage}–${endPage})" else "บทที่ ${index + 1} (หน้า ${startPage})",
-                    order = index,
-                    contents = normalized
-                )
-            }
+            if (sourcePageChapters.isEmpty()) return@update current
+            val chapters = buildChaptersFromSource(starts, current.sourcePageCount)
             current.copy(
                 book = current.book.copy(chapters = chapters, modifiedAt = Instant.now()),
                 status = "กำหนดบทจากหน้า PDF แล้ว: ${chapters.size} บท"
             )
+        }
+    }
+
+    private fun buildChaptersFromSource(startPages: Set<Int>, pageCount: Int): List<Chapter> {
+        val sourcePages = sourcePageChapters.sortedBy { it.order }
+        if (sourcePages.isEmpty()) return emptyList()
+        val starts = startPages + 0
+        val grouped = mutableListOf<MutableList<com.mimee.epubmaker.domain.model.BookContent>>()
+        val groupStartPages = mutableListOf<Int>()
+        var previousPageOrder = -1
+        sourcePages.forEach { page ->
+            val shouldStart = grouped.isEmpty() || starts.any { it > previousPageOrder && it <= page.order }
+            if (shouldStart) {
+                grouped.add(mutableListOf())
+                groupStartPages += page.order
+            }
+            val contents = pageImageBlocks[page.order]?.let { listOf(it) } ?: page.orderedContents()
+            grouped.last().addAll(contents)
+            previousPageOrder = page.order
+        }
+        return grouped.mapIndexed { index, items ->
+            val normalized = items.mapIndexed { itemIndex, item ->
+                when (item) {
+                    is TextBlock -> item.copy(order = itemIndex)
+                    is ImageBlock -> item.copy(order = itemIndex)
+                }
+            }
+            val startPage = (groupStartPages.getOrNull(index) ?: 0) + 1
+            val nextStart = groupStartPages.getOrNull(index + 1)
+            val endPage = if (nextStart != null) nextStart else pageCount
+            Chapter(
+                title = if (endPage > startPage) "บทที่ ${index + 1} (หน้า ${startPage}–${endPage})" else "บทที่ ${index + 1} (หน้า ${startPage})",
+                order = index,
+                contents = normalized
+            )
+        }
+    }
+
+    fun setPageAsImage(pageIndex: Int, enabled: Boolean) {
+        val current = _state.value
+        if (pageIndex !in 0 until current.sourcePageCount || current.selectedUri == null) return
+        if (!enabled) {
+            pageImageBlocks.remove(pageIndex)
+            _state.update { state ->
+                state.copy(
+                    pagesAsImages = state.pagesAsImages - pageIndex,
+                    book = state.book.copy(chapters = buildChaptersFromSource(selectedChapterStarts, state.sourcePageCount), modifiedAt = Instant.now()),
+                    status = "หน้า ${pageIndex + 1} จะใช้ข้อความที่แปลงไว้"
+                )
+            }
+            return
+        }
+        viewModelScope.launch {
+            _state.update { it.copy(status = "กำลังเตรียมภาพหน้าที่ ${pageIndex + 1}…", error = null) }
+            try {
+                val imageBlock = withContext(Dispatchers.IO) {
+                    val uri = current.selectedUri
+                    val bitmap = getApplication<Application>().contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                        PdfRenderer(descriptor).use { renderer ->
+                            require(pageIndex in 0 until renderer.pageCount) { "ไม่พบหน้า PDF ที่เลือก" }
+                            renderer.openPage(pageIndex).use { page ->
+                                val scale = minOf(2f, 2200f / page.width.toFloat(), 3000f / page.height.toFloat())
+                                val width = (page.width * scale).toInt().coerceAtLeast(1)
+                                val height = (page.height * scale).toInt().coerceAtLeast(1)
+                                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { target ->
+                                    target.eraseColor(android.graphics.Color.WHITE)
+                                    val matrix = Matrix().apply { setScale(width.toFloat() / page.width, height.toFloat() / page.height) }
+                                    page.render(target, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                                }
+                            }
+                        }
+                    } ?: error("เปิดไฟล์ PDF เพื่อสร้างภาพไม่ได้")
+                    try {
+                        val directory = File(getApplication<Application>().filesDir, "epub-import-images").apply { mkdirs() }
+                        val file = File(directory, "selected-page-${pageIndex + 1}-${UUID.randomUUID()}.jpg")
+                        FileOutputStream(file).use { output ->
+                            check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "บันทึกภาพหน้า PDF ไม่สำเร็จ" }
+                        }
+                        ImageBlock(
+                            order = 0,
+                            image = ImageAsset(
+                                sourceUri = Uri.fromFile(file).toString(),
+                                fileName = file.name,
+                                mimeType = "image/jpeg",
+                                altText = "หน้า ${pageIndex + 1} จาก PDF",
+                                caption = "หน้า ${pageIndex + 1}",
+                                widthPx = bitmap.width,
+                                heightPx = bitmap.height
+                            ),
+                            handling = ImageHandling.EMBED_AS_IMAGE
+                        )
+                    } finally {
+                        bitmap.recycle()
+                    }
+                }
+                pageImageBlocks[pageIndex] = imageBlock
+                _state.update { state ->
+                    state.copy(
+                        pagesAsImages = state.pagesAsImages + pageIndex,
+                        book = state.book.copy(chapters = buildChaptersFromSource(selectedChapterStarts, state.sourcePageCount), modifiedAt = Instant.now()),
+                        status = "ตั้งหน้า ${pageIndex + 1} เป็นรูปภาพแล้ว"
+                    )
+                }
+            } catch (exception: Exception) {
+                _state.update { it.copy(error = exception.localizedMessage ?: "สร้างภาพจากหน้า PDF ไม่สำเร็จ", status = "ตั้งค่าหน้าเป็นรูปภาพไม่สำเร็จ") }
+            }
         }
     }
 

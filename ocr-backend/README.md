@@ -4,8 +4,8 @@ Optional OCR backend used by the Android app. It accepts one rendered PDF page i
 
 ## Available engines
 
-- **paddleocr-v4**: PaddleOCR PP-OCRv4 Thai OCR, self-hosted.
-- **paddleocr-v5**: PaddleOCR PP-OCRv5 Thai OCR, self-hosted (recommended to test first).
+- **paddleocr-v4**: PaddleOCR PP-OCRv4, self-hosted; the current PP-OCRv4 model supports English/Chinese, not Thai.
+- **paddleocr-v5**: PaddleOCR PP-OCRv5 Thai + English OCR, self-hosted (recommended for Thai books).
 - **paddleocr**: backward-compatible alias for PP-OCRv5.
 - **easyocr**: EasyOCR Thai + English, self-hosted.
 - **paddleocr-vl**: document-oriented PaddleOCR-VL, self-hosted; needs more memory.

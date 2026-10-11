@@ -399,6 +399,24 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                             }
                         }
                     }
+                    Divider(color = Line)
+                    Text("เลือกหน้าที่ต้องการเก็บเป็นรูปภาพ", fontWeight = FontWeight.SemiBold, color = Ink)
+                    Text("ติ๊กแล้ว EPUB จะใช้ภาพเต็มหน้าจาก PDF แทนข้อความ OCR ของหน้านั้น", color = Muted, fontSize = 12.sp)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        (0 until state.sourcePageCount).forEach { pageIndex ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = pageIndex in state.pagesAsImages,
+                                    onCheckedChange = { checked -> vm.setPageAsImage(pageIndex, checked) }
+                                )
+                                Text(
+                                    "หน้า ${pageIndex + 1} ${if (pageIndex in state.pagesAsImages) "— ใช้รูปภาพ" else "— ใช้ข้อความ"}",
+                                    color = Ink,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
                     Button(
                         onClick = {
                             val firstEnd = chapterStartPages.filter { it > 0 }.minOrNull() ?: state.sourcePageCount
@@ -713,12 +731,23 @@ private fun BearReadingMascot(modifier: Modifier = Modifier) {
         circle(28f, 23f, 8f, Color(0xFFE9B99A))
         circle(72f, 23f, 8f, Color(0xFFE9B99A))
         circle(50f, 43f, 31f, Color(0xFFB9825D))
-        circle(39f, 40f, 3f, Ink)
-        circle(61f, 40f, 3f, Ink)
+        circle(39f, 39f, 3.2f, Ink)
+        circle(61f, 39f, 3.2f, Ink)
+        circle(40f, 38f, 0.9f, Color.White)
+        circle(62f, 38f, 0.9f, Color.White)
+        circle(32f, 48f, 4.2f, Color(0xFFEBA3A0))
+        circle(68f, 48f, 4.2f, Color(0xFFEBA3A0))
         circle(50f, 51f, 12f, Color(0xFFF3D7BE))
-        circle(50f, 48f, 3.5f, Ink)
-        drawLine(Ink, androidx.compose.ui.geometry.Offset(50f * sx, 51f * sy), androidx.compose.ui.geometry.Offset(46f * sx, 55f * sy), strokeWidth = 1.6f * sx)
-        drawLine(Ink, androidx.compose.ui.geometry.Offset(50f * sx, 51f * sy), androidx.compose.ui.geometry.Offset(54f * sx, 55f * sy), strokeWidth = 1.6f * sx)
+        circle(50f, 47f, 3.5f, Ink)
+        val happySmile = Path().apply {
+            moveTo(43f * sx, 52f * sy)
+            quadraticBezierTo(50f * sx, 61f * sy, 57f * sx, 52f * sy)
+        }
+        drawPath(
+            happySmile,
+            Ink,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f * sx)
+        )
         drawRoundRect(Color(0xFF6BA7D9), topLeft = androidx.compose.ui.geometry.Offset(18f * sx, 68f * sy), size = androidx.compose.ui.geometry.Size(64f * sx, 23f * sy), cornerRadius = androidx.compose.ui.geometry.CornerRadius(5f * sx))
         val leftPage = Path().apply {
             moveTo(50f * sx, 71f * sy); lineTo(22f * sx, 67f * sy); lineTo(22f * sx, 84f * sy); lineTo(50f * sx, 88f * sy); close()

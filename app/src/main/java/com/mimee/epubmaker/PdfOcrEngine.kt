@@ -34,7 +34,7 @@ internal object PdfOcrEngine {
         onProgress: (Int, Int) -> Unit,
         onPartialResult: (String) -> Unit
     ): String {
-        if (engine !in setOf("tesseract", "mlkit-latin", "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai")) {
+        if (engine !in setOf("tesseract", "mlkit-latin", "paddleocr", "paddleocr-v4", "paddleocr-v5", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai", "qwen2.5-vl", "gpt-4o", "claude-vision")) {
             error("ไม่รู้จัก OCR Engine: $engine")
         }
         if (engine !in setOf("tesseract", "mlkit-latin") &&
@@ -116,7 +116,7 @@ internal object PdfOcrEngine {
                 }
             }
             "mlkit-latin" -> recognizeMlKitLatin(bitmap).trim()
-            "paddleocr", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai" ->
+            "paddleocr", "paddleocr-v4", "paddleocr-v5", "easyocr", "paddleocr-vl", "google-vision", "gemini", "google-document-ai", "qwen2.5-vl", "gpt-4o", "claude-vision" ->
                 recognizeRemote(bitmap, engine, serverUrl, serverToken).trim()
             else -> error("ไม่รู้จัก OCR Engine: $engine")
         }

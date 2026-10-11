@@ -454,8 +454,14 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                                 vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
                                 val next = (selectedPageIndex + 1).coerceAtMost(pages.lastIndex)
                                 selectedPageIndex = next
-                                val pageText = pages[next].orderedContents().filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>().joinToString("\n\n") { it.plainText }
+                                val pageText = pages.getOrNull(next)?.orderedContents()
+                                    ?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
+                                    ?.joinToString("\n\n") { it.plainText }.orEmpty()
                                 editorValue = TextFieldValue(AnnotatedString(pageText), selection = androidx.compose.ui.text.TextRange(pageText.length))
+                                val pageBlock = pages.getOrNull(next)?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()
+                                alignment = pageBlock?.paragraphStyle?.alignment ?: TextAlignment.START
+                                indent = pageBlock?.paragraphStyle?.firstLineIndentEm ?: 1f
+                                spacing = pageBlock?.paragraphStyle?.spacingAfterEm ?: 0.8f
                             },
                             enabled = state.hasConverted && selectedPageIndex < pages.lastIndex,
                             modifier = Modifier.weight(1f)

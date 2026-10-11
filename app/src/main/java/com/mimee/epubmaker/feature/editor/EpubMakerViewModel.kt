@@ -347,6 +347,13 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
             }
             while (replacementIndex < replacements.size) output += replacements[replacementIndex++].copy(order = output.size)
             chapters[chapterIndex] = chapter.copy(contents = output)
+            if (chapterIndex in sourcePageChapters.indices &&
+                sourcePageChapters[chapterIndex].title.startsWith("หน้า ")
+            ) {
+                sourcePageChapters = sourcePageChapters.toMutableList().also { sourcePages ->
+                    sourcePages[chapterIndex] = sourcePages[chapterIndex].copy(contents = output)
+                }
+            }
             current.copy(book = current.book.copy(chapters = chapters, modifiedAt = Instant.now()))
         }
     }

@@ -284,7 +284,30 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun exportTo(uri: Uri, text: String, runs: List<RichTextRun>, paragraphStyle: ParagraphStyle) {
+    fun updatePageManuscript(chapterIndex: Int, text: String, runs: List<RichTextRun>, paragraphStyle: ParagraphStyle) {
+        _state.update { current ->
+            val chapters = current.book.orderedChapters().toMutableList()
+            if (chapterIndex !in chapters.indices) return@update current
+            val chapter = chapters[chapterIndex]
+            val normalizedRuns = if (runs.isEmpty() && text.isNotEmpty()) listOf(RichTextRun(text)) else runs
+            val paragraphs = splitRichRunsIntoParagraphs(text, normalizedRuns)
+            val replacements = paragraphs.mapIndexed { index, paragraph ->
+                TextBlock(order = index, runs = paragraph, paragraphStyle = paragraphStyle)
+            }
+            val output = mutableListOf<com.mimee.epubmaker.domain.model.BookContent>()
+            var replacementIndex = 0
+            chapter.orderedContents().forEach { item ->
+                if (item is TextBlock) {
+                    if (replacementIndex < replacements.size) output += replacements[replacementIndex++].copy(order = output.size)
+                } else output += item
+            }
+            while (replacementIndex < replacements.size) output += replacements[replacementIndex++].copy(order = output.size)
+            chapters[chapterIndex] = chapter.copy(contents = output)
+            current.copy(book = current.book.copy(chapters = chapters, modifiedAt = Instant.now()))
+        }
+    }
+
+    fun exportTo(uri: Uri, text: String, runs: List<RichTextRun>, paragraphStyle: ParagraphStyle, chapterIndex: Int = 0) {
         val current = _state.value
         if (!current.hasConverted) {
             _state.update { it.copy(error = "กรุณากดเริ่มแปลงก่อนส่งออก EPUB") }
@@ -295,7 +318,7 @@ class EpubMakerViewModel(application: Application) : AndroidViewModel(applicatio
             _state.update { it.copy(error = "กรุณาระบุชื่อหนังสือ") }
             return
         }
-        updateManuscript(text, runs, paragraphStyle)
+        updatePageManuscript(chapterIndex, text, runs, paragraphStyle)
         val book = _state.value.book
         _state.update { it.copy(isExporting = true, error = null, status = "กำลังสร้างไฟล์ EPUB…") }
         viewModelScope.launch {

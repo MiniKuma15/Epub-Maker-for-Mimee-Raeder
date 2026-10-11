@@ -265,6 +265,16 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     androidx.compose.material3.Checkbox(
+                        checked = state.extractEmbeddedTextOnly,
+                        onCheckedChange = vm::setExtractEmbeddedTextOnly
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text("PDF มีข้อความฝังอยู่แล้ว (ไม่ใช้ OCR)", fontWeight = FontWeight.Medium, color = Ink)
+                        Text("ดึงข้อความจาก PDF โดยตรง ส่วนหน้าสแกนจะเก็บเป็นภาพ ไม่ส่งเข้า OCR", color = Muted, fontSize = 12.sp)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(
                         checked = state.runOcrForImages,
                         onCheckedChange = vm::setRunOcrForImages
                     )

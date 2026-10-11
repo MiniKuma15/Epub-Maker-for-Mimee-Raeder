@@ -381,4 +381,4 @@ def _extract_paddle_text(result: Any) -> str:
                 visit(child)
 
     visit(result)
-    return "\\n".join(lines)
+    return "\n".join(lines)

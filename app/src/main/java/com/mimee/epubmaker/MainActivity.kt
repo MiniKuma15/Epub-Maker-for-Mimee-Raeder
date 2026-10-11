@@ -148,6 +148,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     var indent by remember { mutableFloatStateOf(1f) }
     var spacing by remember { mutableFloatStateOf(0.8f) }
     var showPreview by remember { mutableStateOf(false) }
+    var selectedPageIndex by remember { mutableStateOf(0) }
     var showEngineMenu by remember { mutableStateOf(false) }
     var altText by remember { mutableStateOf("") }
     var caption by remember { mutableStateOf("") }
@@ -173,18 +174,22 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
     val saveEpub = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/epub+zip")) { uri ->
         if (uri != null) {
             val runs = richRuns(editorValue.annotatedString)
-            vm.exportTo(uri, editorValue.text, runs, ParagraphStyle(alignment, indent, spacing))
+            vm.exportTo(uri, editorValue.text, runs, ParagraphStyle(alignment, indent, spacing), selectedPageIndex)
         }
     }
 
     LaunchedEffect(state.hasConverted, state.selectedUri) {
         if (state.hasConverted) {
-            val text = state.book.allTextBlocks().joinToString("\n\n") { it.plainText }
+            selectedPageIndex = 0
+            val chapter = state.book.orderedChapters().firstOrNull()
+            val text = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()
+                ?.joinToString("\n\n") { it.plainText }.orEmpty()
             editorValue = TextFieldValue(AnnotatedString(text), selection = androidx.compose.ui.text.TextRange(text.length))
-            alignment = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.alignment ?: TextAlignment.START
-            indent = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.firstLineIndentEm ?: 1f
-            spacing = state.book.allTextBlocks().firstOrNull()?.paragraphStyle?.spacingAfterEm ?: 0.8f
+            alignment = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()?.paragraphStyle?.alignment ?: TextAlignment.START
+            indent = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()?.paragraphStyle?.firstLineIndentEm ?: 1f
+            spacing = chapter?.orderedContents()?.filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>()?.firstOrNull()?.paragraphStyle?.spacingAfterEm ?: 0.8f
         } else {
+            selectedPageIndex = 0
             editorValue = TextFieldValue("")
         }
     }
@@ -371,7 +376,36 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                 Text("รูปแบบไฟล์ปลายทาง: EPUB 3 เท่านั้น", color = Blue, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
 
-            SectionCard("4. แก้ไขข้อความ (Rich Text Editor)", Icons.Default.TextFields) {
+            SectionCard("4. แก้ไขข้อความทีละหน้า", Icons.Default.TextFields) {
+                val pages = state.book.orderedChapters()
+                if (pages.isNotEmpty()) {
+                    Text("หน้า ${selectedPageIndex + 1} / ${pages.size}", color = Blue, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
+                                val next = (selectedPageIndex - 1).coerceAtLeast(0)
+                                selectedPageIndex = next
+                                val pageText = pages[next].orderedContents().filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>().joinToString("\n\n") { it.plainText }
+                                editorValue = TextFieldValue(AnnotatedString(pageText), selection = androidx.compose.ui.text.TextRange(pageText.length))
+                            },
+                            enabled = state.hasConverted && selectedPageIndex > 0,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("หน้าก่อนหน้า") }
+                        OutlinedButton(
+                            onClick = {
+                                vm.updatePageManuscript(selectedPageIndex, editorValue.text, richRuns(editorValue.annotatedString), ParagraphStyle(alignment, indent, spacing))
+                                val next = (selectedPageIndex + 1).coerceAtMost(pages.lastIndex)
+                                selectedPageIndex = next
+                                val pageText = pages[next].orderedContents().filterIsInstance<com.mimee.epubmaker.domain.model.TextBlock>().joinToString("\n\n") { it.plainText }
+                                editorValue = TextFieldValue(AnnotatedString(pageText), selection = androidx.compose.ui.text.TextRange(pageText.length))
+                            },
+                            enabled = state.hasConverted && selectedPageIndex < pages.lastIndex,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("หน้าถัดไป") }
+                    }
+                }
+                Text("แก้ข้อความของแต่ละหน้าแยกกันได้ การเปลี่ยนหน้าจะบันทึกข้อความหน้านี้ไว้ในหนังสือ", color = Muted, fontSize = 13.sp)
                 Text("เลือกข้อความในช่องแก้ไขแล้วใช้ปุ่มตัวหนา/ตัวเอียง หรือเลือกการจัดแนวและการเยื้องบรรทัดแรก", color = Muted, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
                     EditorTool(Icons.Default.FormatBold, "ตัวหนา", Modifier.weight(1f)) {

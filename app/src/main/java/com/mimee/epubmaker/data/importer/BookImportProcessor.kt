@@ -53,12 +53,14 @@ class BookImportProcessor(private val context: Context) {
         } ?: error("เปิดไฟล์ PDF ไม่ได้")
 
         val contents = mutableListOf<BookContent>()
+        val pageChapters = mutableListOf<Chapter>()
         val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
             ?: error("เปิดไฟล์ PDF เพื่อเรนเดอร์ไม่ได้")
         descriptor.use { pfd ->
             PdfRenderer(pfd).use { renderer ->
                 require(renderer.pageCount > 0) { "PDF ไม่มีหน้า" }
                 for (index in 0 until renderer.pageCount) {
+                    val pageStart = contents.size
                     onProgress(index + 1, renderer.pageCount, "กำลังอ่านหน้า ${index + 1}/${renderer.pageCount}")
                     val text = pageText.getOrNull(index).orEmpty()
                     if (text.isNotBlank()) {
@@ -115,6 +117,19 @@ class BookImportProcessor(private val context: Context) {
                             }
                         }
                     }
+                    val pageItems = contents.drop(pageStart).mapIndexed { itemIndex, item ->
+                        when (item) {
+                            is TextBlock -> item.copy(order = itemIndex)
+                            is ImageBlock -> item.copy(order = itemIndex)
+                        }
+                    }
+                    if (pageItems.isNotEmpty()) {
+                        pageChapters += Chapter(
+                            title = "หน้า ${index + 1}",
+                            order = index,
+                            contents = pageItems
+                        )
+                    }
                 }
             }
         }
@@ -127,7 +142,7 @@ class BookImportProcessor(private val context: Context) {
                 sourceFileName = "document.pdf",
                 sourceMimeType = "application/pdf"
             ),
-            chapters = listOf(Chapter(title = title.ifBlank { "เนื้อหา" }, order = 0, contents = contents)),
+            chapters = pageChapters.ifEmpty { listOf(Chapter(title = title.ifBlank { "เนื้อหา" }, order = 0, contents = contents)) },
             coverImage = firstImage?.let {
                 CoverImage(
                     source = CoverSource.ExistingImage(it.id),

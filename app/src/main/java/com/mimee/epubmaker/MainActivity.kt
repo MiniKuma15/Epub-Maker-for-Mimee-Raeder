@@ -283,7 +283,7 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                     listOf(
                         "tesseract" to "Tesseract — Offline ไทย + อังกฤษ (สำรอง)",
                         "mlkit-latin" to "Google ML Kit — Offline อังกฤษ/Latin",
-                        "paddleocr-v4" to "PaddleOCR PP-OCRv4 — Server / Offline บนเครื่องเซิร์ฟเวอร์",
+                        "paddleocr-v4" to "PaddleOCR PP-OCRv4 — Server (อังกฤษเท่านั้น)",
                         "paddleocr-v5" to "PaddleOCR PP-OCRv5 — Server / Offline บนเครื่องเซิร์ฟเวอร์",
                         "paddleocr-vl" to "PaddleOCR-VL — Server วิเคราะห์เอกสาร",
                         "easyocr" to "EasyOCR — Server ไทย + อังกฤษ",
@@ -299,6 +299,12 @@ private fun EpubMakerScreen(vm: EpubMakerViewModel) {
                 }
                 if (state.ocrEngine == "mlkit-latin") {
                     Text("ข้อจำกัด: ML Kit Text Recognition รุ่น Latin ไม่รองรับภาษาไทยโดยตรง หากต้องการ OCR ภาษาไทยแบบออฟไลน์ให้เลือก Tesseract", color = Muted, fontSize = 12.sp)
+                }
+                if (state.ocrEngine == "paddleocr-v4") {
+                    Text("ข้อจำกัดสำคัญ: PP-OCRv4 ไม่มีโมเดลอ่านข้อความภาษาไทยใน PaddleOCR รุ่นปัจจุบัน ตัวเลือกนี้เหมาะกับภาษาอังกฤษเท่านั้น หากเป็นหนังสือไทย/อังกฤษให้เลือก PP-OCRv5", color = Muted, fontSize = 12.sp)
+                }
+                if (state.ocrEngine == "paddleocr-v5") {
+                    Text("PP-OCRv5 รองรับโมเดลอ่านข้อความภาษาไทยและอังกฤษ แต่ต้องมี OCR backend ที่ติดตั้ง PaddleOCR รุ่นที่รองรับ", color = Muted, fontSize = 12.sp)
                 }
                 if (state.ocrEngine != "tesseract" && state.ocrEngine != "mlkit-latin") {
                     OutlinedTextField(
@@ -640,7 +646,7 @@ private fun engineLabel(engine: String): String = when (engine) {
     "tesseract" -> "Tesseract — Offline ไทย + อังกฤษ (สำรอง)"
     "mlkit-latin" -> "Google ML Kit — Offline อังกฤษ/Latin"
     "paddleocr", "paddleocr-v5" -> "PaddleOCR PP-OCRv5 — Server"
-    "paddleocr-v4" -> "PaddleOCR PP-OCRv4 — Server"
+    "paddleocr-v4" -> "PaddleOCR PP-OCRv4 — Server (อังกฤษเท่านั้น)"
     "easyocr" -> "EasyOCR — Server ไทย + อังกฤษ"
     "paddleocr-vl" -> "PaddleOCR-VL — Server วิเคราะห์เอกสาร"
     "google-vision" -> "Google Cloud Vision — Online API"
